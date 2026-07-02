@@ -345,7 +345,7 @@ const BattleManager = (() => {
     // 캐릭터 행동 처리 (러너 페이즈)
     // ============================================
 
-    function resolveAttack(battle, character, zombieId, log) {
+    function resolveAttack(battle, character, zombieId, log, summary) {
 
         const zombie = battle.zombies.find(z => z.id === zombieId && z.alive);
 
@@ -360,6 +360,12 @@ const BattleManager = (() => {
         const result = rollStat(character, "strength");
 
         log.push(`- ${character.name} 공격(근력) 판정 ${formatRoll(result)}`);
+
+        if (summary) {
+
+            summary.attacks.push(`공격(근력) 판정 ${formatRoll(result)}`);
+
+        }
 
         if (!result.success) {
 
@@ -403,11 +409,17 @@ const BattleManager = (() => {
 
     }
 
-    function resolveEvade(character, log) {
+    function resolveEvade(character, log, summary) {
 
         const result = rollStat(character, "agility");
 
         log.push(`- ${character.name} 회피/도주(민첩) 판정 ${formatRoll(result)}`);
+
+        if (summary) {
+
+            summary.flees.push(`도주(민첩) 판정 ${formatRoll(result)}`);
+
+        }
 
         if (result.success) {
 
@@ -441,7 +453,17 @@ const BattleManager = (() => {
 
     function resolveSpecialty(character, log) {
 
-        const rollObject = makeSpecialtyRollObject(character);
+        // status.html에서 저장한 특기 레벨(character.stats.specialty)이 있으면
+        // 그 값을 그대로 사용하고, 없을 때만 임시 고정 레벨로 대체 판정
+
+        const hasStoredLevel =
+            character.stats &&
+            typeof character.stats.specialty === "number" &&
+            !Number.isNaN(character.stats.specialty);
+
+        const rollObject = hasStoredLevel
+            ? character
+            : makeSpecialtyRollObject(character);
 
         const result = rollStat(rollObject, "specialty");
 
@@ -450,6 +472,12 @@ const BattleManager = (() => {
             : "특기";
 
         log.push(`- ${character.name} ${specialtyLabel} 판정 ${formatRoll(result)}`);
+
+        if (!hasStoredLevel) {
+
+            log.push(`  (⚠ status.html에 저장된 특기 레벨이 없어 임시 레벨 ${SPECIALTY_FALLBACK_LEVEL} 사용)`);
+
+        }
 
         log.push(
             result.success
@@ -463,7 +491,7 @@ const BattleManager = (() => {
     // 좀비 행동 처리 (좀비 페이즈)
     // ============================================
 
-    function resolveZombieAttack(battle, zombie, log) {
+    function resolveZombieAttack(battle, zombie, log, summary) {
 
         // 도주로 전투를 이탈했거나(fled) 이미 전투불능(down)인 캐릭터는
         // 지목 대상에서 제외 - "alive" 상태만 대상
@@ -490,6 +518,12 @@ const BattleManager = (() => {
 
         log.push(`  공격 판정 ${formatRoll(attackResult)}`);
 
+        if (summary) {
+
+            summary.zombieAttacks.push(`좀비 #${zombie.id} 공격 판정 ${formatRoll(attackResult)}`);
+
+        }
+
         if (!attackResult.success) {
 
             log.push(`  → 빗나감`);
@@ -503,6 +537,12 @@ const BattleManager = (() => {
         const evadeResult = rollStat(target, "agility");
 
         log.push(`  → ${target.name} 회피 판정 ${formatRoll(evadeResult)}`);
+
+        if (summary) {
+
+            summary.evades.push(`회피(민첩) 판정 ${formatRoll(evadeResult)}`);
+
+        }
 
         const winner = resolveContest(
             attackResult,
@@ -573,6 +613,12 @@ const BattleManager = (() => {
 
                 log.push(`  → 감염 위험, 행운 판정 ${formatRoll(luckCheck)}`);
 
+                if (summary) {
+
+                    summary.lucks.push(`행운 판정 ${formatRoll(luckCheck)}`);
+
+                }
+
                 infected = !luckCheck.success;
 
                 log.push(infected ? `  → 행운 판정 실패, 감염됨` : `  → 행운 판정 성공, 감염 저항`);
@@ -613,6 +659,17 @@ const BattleManager = (() => {
 
         const log = [];
 
+        // 라운드 종료 시 순서별(캐릭터 공격 → 좀비 공격 → 캐릭터 회피 → 캐릭터 행운)로
+        // 판정 결과만 모아서 다시 출력하기 위한 요약 버킷
+
+        const roundSummary = {
+            attacks: [],
+            flees: [],
+            zombieAttacks: [],
+            evades: [],
+            lucks: []
+        };
+
         log.push(`===== ${battle.round} 라운드 =====`);
 
         // 1) 러너 공격 페이즈
@@ -637,13 +694,13 @@ const BattleManager = (() => {
 
                 if (action.type === "attack") {
 
-                    resolveAttack(battle, character, action.targetZombieId, log);
+                    resolveAttack(battle, character, action.targetZombieId, log, roundSummary);
 
                 }
 
                 else if (action.type === "evade") {
 
-                    resolveEvade(character, log);
+                    resolveEvade(character, log, roundSummary);
 
                 }
 
@@ -671,9 +728,53 @@ const BattleManager = (() => {
 
             if (!zombie.alive) return;
 
-            resolveZombieAttack(battle, zombie, log);
+            resolveZombieAttack(battle, zombie, log, roundSummary);
 
         });
+
+        // 2.5) 라운드 종료 요약 (캐릭터 공격 → 좀비 공격 → 캐릭터 회피 → 캐릭터 행운 순)
+
+        log.push(`----- ${battle.round}라운드 판정 요약 -----`);
+
+        if (roundSummary.attacks.length > 0) {
+
+            log.push(`러너 페이즈`);
+
+            roundSummary.attacks.forEach(entry => log.push(entry));
+
+        }
+
+        if (roundSummary.flees.length > 0) {
+
+            log.push(`캐릭터 도주`);
+
+            roundSummary.flees.forEach(entry => log.push(entry));
+
+        }
+
+        if (roundSummary.zombieAttacks.length > 0) {
+
+            log.push(`좀비 페이즈`);
+
+            roundSummary.zombieAttacks.forEach(entry => log.push(entry));
+
+        }
+
+        if (roundSummary.evades.length > 0) {
+
+            log.push(`캐릭터 회피`);
+
+            roundSummary.evades.forEach(entry => log.push(entry));
+
+        }
+
+        if (roundSummary.lucks.length > 0) {
+
+            log.push(`캐릭터 행운`);
+
+            roundSummary.lucks.forEach(entry => log.push(entry));
+
+        }
 
         battle.log.push(...log);
 
@@ -902,6 +1003,10 @@ function renderAllBattles() {
 
 }
 
+// 전투 카드별 접기/펼치기 상태 (라운드 진행 등으로 카드가 다시 그려져도 유지)
+
+const collapsedBattleIds = new Set();
+
 function renderBattleCard(battle) {
 
     const card = document.createElement("div");
@@ -914,18 +1019,56 @@ function renderBattleCard(battle) {
         defeat: "패배/전멸"
     }[battle.status];
 
+    const isCollapsed = collapsedBattleIds.has(battle.id);
+
     card.innerHTML = `
-        <h2>${battle.name} (${battle.round}라운드 / ${statusText})</h2>
-        <button class="btnDeleteBattle">전투 삭제</button>
-        <button class="btnSaveLog">📄 전투 로그 저장</button>
-        <h3>좀비</h3>
-        <div class="zombie-list"></div>
-        <h3>캐릭터</h3>
-        <div class="character-list"></div>
+        <div class="battle-card-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer;">
+            <h2 style="margin:0;">${battle.name} (${battle.round}라운드 / ${statusText})</h2>
+            <button class="btnToggleBattle" type="button">${isCollapsed ? "▶ 펼치기" : "▼ 접기"}</button>
+        </div>
+        <div class="battle-card-body" style="${isCollapsed ? "display:none;" : ""}">
+            <button class="btnDeleteBattle">전투 삭제</button>
+            <button class="btnSaveLog">📄 전투 로그 저장</button>
+            <h3>좀비</h3>
+            <div class="zombie-list"></div>
+            <h3>캐릭터</h3>
+            <div class="character-list"></div>
+        </div>
     `;
 
+    const headerEl = card.querySelector(".battle-card-header");
+    const toggleBtn = card.querySelector(".btnToggleBattle");
+    const bodyEl = card.querySelector(".battle-card-body");
+
+    const toggleCollapse = () => {
+
+        const collapsing = bodyEl.style.display !== "none";
+
+        bodyEl.style.display = collapsing ? "none" : "";
+        toggleBtn.textContent = collapsing ? "▶ 펼치기" : "▼ 접기";
+
+        if (collapsing) {
+            collapsedBattleIds.add(battle.id);
+        } else {
+            collapsedBattleIds.delete(battle.id);
+        }
+
+    };
+
+    headerEl.addEventListener("click", (e) => {
+
+        if (e.target === toggleBtn) return; // 버튼 클릭은 버튼 리스너가 처리
+
+        toggleCollapse();
+
+    });
+
+    toggleBtn.addEventListener("click", toggleCollapse);
+
     card.querySelector(".btnDeleteBattle")
-        .addEventListener("click", () => {
+        .addEventListener("click", (e) => {
+
+            e.stopPropagation();
 
             if (!confirm("이 전투를 삭제하시겠습니까?")) return;
 
@@ -936,7 +1079,9 @@ function renderBattleCard(battle) {
         });
 
     card.querySelector(".btnSaveLog")
-        .addEventListener("click", () => {
+        .addEventListener("click", (e) => {
+
+            e.stopPropagation();
 
             saveBattleLogToFile(battle);
 
@@ -982,7 +1127,7 @@ function renderBattleCard(battle) {
 
     if (battle.status === "ongoing") {
 
-        card.appendChild(renderRoundControls(battle));
+        bodyEl.appendChild(renderRoundControls(battle));
 
     }
 
@@ -999,7 +1144,7 @@ function renderBattleCard(battle) {
 
     logBox.textContent = battle.log.join("\n");
 
-    card.appendChild(logBox);
+    bodyEl.appendChild(logBox);
 
     return card;
 
