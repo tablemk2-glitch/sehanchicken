@@ -363,7 +363,7 @@ const BattleManager = (() => {
 
         if (summary) {
 
-            summary.attacks.push(`공격(근력) 판정 ${formatRoll(result)}`);
+            summary.attacks.push(`${character.name} 공격(근력) 판정 ${formatRoll(result)}`);
 
         }
 
@@ -417,7 +417,7 @@ const BattleManager = (() => {
 
         if (summary) {
 
-            summary.flees.push(`도주(민첩) 판정 ${formatRoll(result)}`);
+            summary.flees.push(`${character.name} 도주(민첩) 판정 ${formatRoll(result)}`);
 
         }
 
@@ -540,7 +540,7 @@ const BattleManager = (() => {
 
         if (summary) {
 
-            summary.evades.push(`회피(민첩) 판정 ${formatRoll(evadeResult)}`);
+            summary.evades.push(`${target.name} 회피(민첩) 판정 ${formatRoll(evadeResult)}`);
 
         }
 
@@ -615,7 +615,7 @@ const BattleManager = (() => {
 
                 if (summary) {
 
-                    summary.lucks.push(`행운 판정 ${formatRoll(luckCheck)}`);
+                    summary.lucks.push(`${target.name} 행운 판정 ${formatRoll(luckCheck)}`);
 
                 }
 
