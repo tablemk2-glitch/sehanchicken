@@ -1,0 +1,915 @@
+/* ============================================
+   style.css
+   Character Manager System - 공통 스타일시트
+   (로고 컬러: 레드 / 크림 / 핑크 톤에 맞춰 구성)
+   ============================================ */
+
+/* ----------------------------------------
+   0. 변수 (색상 / 여백 / 폰트)
+   ---------------------------------------- */
+
+:root {
+
+    /* 로고 기반 팔레트 */
+    --color-bg: #fff8e8;             /* 크림 배경 */
+    --color-bg-soft: #fff1d2;        /* 살짝 진한 크림 */
+    --color-surface: #ffffff;        /* 카드 배경 */
+    --color-surface-hover: #fff3d9;
+
+    --color-border: #f6d9a8;         /* 크림-골드 보더 */
+    --color-border-strong: #f3b5b7;  /* 핑크빛 보더 (포인트용) */
+
+    --color-text: #3d2a1a;           /* 진한 브라운 (가독성) */
+    --color-text-muted: #9a7f5c;
+
+    --color-primary: #e2211c;        /* 로고 레드 */
+    --color-primary-hover: #ff4034;
+    --color-primary-soft: #fbdedd;
+
+    --color-accent: #f4989c;         /* 벼슬/핑크 포인트 */
+    --color-accent-hover: #f7b0b3;
+
+    --color-warning: #f2a900;        /* 골드 (튀김/치킨 느낌) */
+    --color-danger: #c81119;
+
+    --color-log-bg: #2b1c12;         /* 로그 박스는 진한 브라운 유지 */
+    --color-log-text: #ffce54;       /* 치킨 골드 */
+
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+
+    --shadow-card: 0 3px 12px rgba(226, 33, 28, 0.08);
+
+    --font-base: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic",
+        -apple-system, BlinkMacSystemFont, sans-serif;
+
+}
+
+/* ----------------------------------------
+   1. 리셋 / 기본
+   ---------------------------------------- */
+
+* {
+
+    box-sizing: border-box;
+
+}
+
+html, body {
+
+    margin: 0;
+    padding: 0;
+
+}
+
+body {
+
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-base);
+    line-height: 1.6;
+    min-height: 100vh;
+
+}
+
+h1, h2, h3, h4 {
+
+    margin: 0 0 12px 0;
+    color: var(--color-text);
+    font-weight: 800;
+
+}
+
+h1 { font-size: 1.9rem; }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.05rem; color: var(--color-text-muted); font-weight: 700; }
+
+p {
+
+    margin: 0 0 8px 0;
+
+}
+
+a {
+
+    color: var(--color-primary);
+    text-decoration: none;
+
+}
+
+a:hover {
+
+    color: var(--color-primary-hover);
+
+}
+
+ul {
+
+    margin: 0;
+    padding-left: 20px;
+
+}
+
+/* ----------------------------------------
+   2. 헤더 / 로고 / 네비게이션
+   ---------------------------------------- */
+
+.header {
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    padding: 16px 32px;
+
+    background: #ffffff;
+    border-bottom: 3px solid var(--color-primary);
+
+}
+
+.logo {
+
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--color-primary);
+    letter-spacing: 0.5px;
+
+}
+
+/* battle.html처럼 <nav> 안에 그냥 <a> 태그만 있는 경우 */
+
+.header nav {
+
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+
+}
+
+.header nav a {
+
+    padding: 8px 16px;
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    font-weight: 700;
+    transition: background 0.15s, color 0.15s;
+
+}
+
+.header nav a:hover {
+
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+
+}
+
+.header nav a.active {
+
+    background: var(--color-primary);
+    color: #fff;
+
+}
+
+/* index.html처럼 class="navbar" / "nav-btn" 을 쓰는 경우 */
+
+.navbar {
+
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+
+}
+
+.nav-btn {
+
+    padding: 8px 16px;
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    font-weight: 700;
+    transition: background 0.15s, color 0.15s;
+
+}
+
+.nav-btn:hover {
+
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+
+}
+
+.nav-btn.active {
+
+    background: var(--color-primary);
+    color: #fff;
+
+}
+
+/* ----------------------------------------
+   3. 레이아웃 컨테이너
+   ---------------------------------------- */
+
+.container,
+.main-container {
+
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+
+}
+
+/* ----------------------------------------
+   4. Hero (소개 영역 - 남아있는 페이지 대비)
+   ---------------------------------------- */
+
+.hero {
+
+    text-align: center;
+    padding: 24px 12px 8px;
+
+}
+
+.hero h1 {
+
+    color: var(--color-primary);
+
+}
+
+.hero p {
+
+    color: var(--color-text-muted);
+
+}
+
+/* ----------------------------------------
+   5. 메뉴 그리드 (index.html)
+   ---------------------------------------- */
+
+.menu-grid {
+
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+
+}
+
+.menu-card {
+
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 30px 20px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+
+    text-decoration: none;   /* 추가: 링크 밑줄 제거 */
+    color: inherit;          /* 추가: 링크 기본 색상(파란색 등) 방지 */
+    cursor: pointer;         /* 추가: 카드 전체가 클릭 가능함을 표시 */
+
+    box-shadow: var(--shadow-card);
+    transition: transform 0.15s, border-color 0.15s;
+
+}
+
+.menu-card:hover {
+
+    transform: translateY(-4px);
+    border-color: var(--color-primary);
+
+}
+
+.card-icon {
+
+    font-size: 2.5rem;
+    line-height: 1;
+
+}
+
+.menu-card h2 {
+
+    margin: 4px 0 0;
+    font-size: 1.15rem;
+    color: var(--color-text);
+
+}
+
+.menu-button {
+
+    margin-top: 10px;
+    padding: 10px 24px;
+    border-radius: 999px;
+
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 800;
+
+    transition: background 0.15s;
+
+}
+
+.menu-button:hover {
+
+    background: var(--color-primary-hover);
+    color: #fff;
+
+}
+
+/* ----------------------------------------
+   6. 정보 패널 / 표 (index.html 등)
+   ---------------------------------------- */
+
+.info-panel {
+
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+
+    box-shadow: var(--shadow-card);
+
+}
+
+table {
+
+    width: 100%;
+    border-collapse: collapse;
+
+}
+
+.info-table th,
+.info-table td,
+.stat-table th,
+.stat-table td,
+table th,
+table td {
+
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+
+}
+
+.info-table th {
+
+    width: 140px;
+    color: var(--color-text-muted);
+    font-weight: 700;
+
+}
+
+.stat-table thead th {
+
+    color: var(--color-primary);
+    font-weight: 800;
+    border-bottom: 2px solid var(--color-border-strong);
+
+}
+
+table tr:last-child td {
+
+    border-bottom: none;
+
+}
+
+.rule-list {
+
+    list-style: none;
+    padding: 0;
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+}
+
+.rule-list li {
+
+    padding: 8px 12px;
+    background: var(--color-bg-soft);
+    border-radius: var(--radius-sm);
+
+}
+
+/* ----------------------------------------
+   7. 공용 카드 (status.html / dice.html / battle.html)
+   ---------------------------------------- */
+
+.card {
+
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+
+    box-shadow: var(--shadow-card);
+
+}
+
+/* ----------------------------------------
+   8. 폼 요소 (input / select / label / button)
+   ---------------------------------------- */
+
+label {
+
+    display: block;
+    margin-bottom: 4px;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select,
+textarea {
+
+    width: 100%;
+    padding: 9px 12px;
+    margin-bottom: 14px;
+
+    background: var(--color-bg-soft);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.95rem;
+
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+
+    outline: none;
+    border-color: var(--color-primary);
+
+}
+
+button {
+
+    padding: 9px 20px;
+
+    background: #fff;
+    border: 2px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text);
+
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 800;
+    cursor: pointer;
+
+    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.05s;
+
+}
+
+button:hover {
+
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+
+}
+
+button:active {
+
+    transform: scale(0.97);
+
+}
+
+.btn-primary {
+
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+
+}
+
+.btn-primary:hover {
+
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+
+}
+
+/* 캐릭터 관리 테이블(status.html)의 행 내 버튼은 조금 작게 */
+
+table button {
+
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    margin-right: 4px;
+
+}
+
+/* ----------------------------------------
+   9. 캐릭터 테이블 (status.html)
+   ---------------------------------------- */
+
+#characterTableBody tr:hover {
+
+    background: var(--color-bg-soft);
+
+}
+
+
+/* 캐릭터 추가/수정 폼 - 가로 배치 */
+.form-grid-horizontal {
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px;
+    margin-bottom: 14px;
+
+}
+
+.form-grid-horizontal > div {
+
+    display: flex;
+    flex-direction: column;
+
+}
+
+.field-name    { flex: 1 1 180px; }
+.field-stat    { flex: 0 1 80px; }
+.field-specialty { flex: 1 1 200px; }
+.field-memo    { flex: 2 1 260px; }
+
+.form-grid-horizontal input,
+.form-grid-horizontal textarea {
+
+    margin-bottom: 0;
+
+}
+
+.form-grid-horizontal textarea {
+
+    resize: vertical;
+    font-family: inherit;
+
+}
+
+.button-group {
+
+    display: flex;
+    gap: 8px;
+
+}
+
+/* 화면이 좁아지면 세로로 전환 */
+@media (max-width: 640px) {
+
+    .form-grid-horizontal {
+        flex-direction: column;
+    }
+
+    .field-name, .field-stat, .field-specialty, .field-memo {
+        flex: 1 1 auto;
+    }
+
+}
+
+
+/* ----------------------------------------
+   10. 다이스 판정 페이지 (dice.html) 공용
+   ---------------------------------------- */
+
+.dice-result,
+.result-text {
+
+    margin-top: 10px;
+    padding: 10px 14px;
+
+    background: var(--color-bg-soft);
+    border: 2px dashed var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    font-weight: 800;
+    color: var(--color-primary);
+
+}
+
+.roll-success { color: var(--color-primary); }
+.roll-fail { color: var(--color-text-muted); }
+.roll-critical { color: var(--color-warning); }
+.roll-fumble { color: var(--color-danger); }
+
+.character-select-row {
+
+    margin-bottom: 6px;
+
+}
+
+.character-preview {
+
+    margin: 4px 0 8px 24px;
+    padding: 6px 10px;
+
+    background: var(--color-bg-soft);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 4px;
+
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+
+}
+
+.result-copy-area {
+
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+}
+
+.result-text-block {
+
+    margin: 0;
+    padding: 10px 14px;
+
+    background: var(--color-bg-soft);
+    border: 2px dashed var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+    min-height: 1.6em;
+
+}
+
+/* ----------------------------------------
+   11. 전투 페이지 (battle.html)
+   ---------------------------------------- */
+
+.battle-setting {
+
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 10px;
+
+}
+
+.hint-text {
+
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-top: -4px;
+
+}
+
+.placeholder-text {
+
+    color: var(--color-text-muted);
+    font-style: italic;
+
+}
+
+.character-select-list {
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+
+    background: var(--color-bg-soft);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+    margin-bottom: 14px;
+
+}
+
+.character-select-item {
+
+    padding: 6px 12px;
+    background: #ffffff;
+    border: 2px solid var(--color-border);
+    border-radius: 999px;
+    cursor: pointer;
+
+}
+
+
+.character-select-item.selected {
+
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+
+}
+
+.character-select-item:hover {
+
+    border-color: var(--color-primary);
+
+}
+
+.zombie-target-area {
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    padding: 12px;
+    background: var(--color-bg-soft);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+    margin-bottom: 14px;
+
+}
+
+.zombie-target-area select {
+
+    margin-bottom: 0;
+    width: auto;
+    min-width: 160px;
+
+}
+
+.utility-card {
+
+    max-width: 480px;
+
+}
+
+/* 전투 카드 */
+
+.battle-card {
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+}
+
+.battle-card h2 {
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--color-primary);
+
+}
+
+.zombie-list,
+.character-list {
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+}
+
+.zombie-list > div,
+.character-list > div {
+
+    padding: 8px 12px;
+
+    background: var(--color-bg-soft);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+    font-size: 0.9rem;
+
+}
+
+/* 라운드 행동 선택 영역 */
+
+.round-controls {
+
+    margin-top: 8px;
+    padding: 14px;
+
+    background: var(--color-bg-soft);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+}
+
+.action-row {
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+
+    padding: 8px 10px;
+
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+}
+
+.action-row select {
+
+    width: auto;
+    margin-bottom: 0;
+
+}
+
+.btnDeleteBattle {
+
+    background: transparent;
+    border: 2px solid var(--color-danger);
+    color: var(--color-danger);
+
+    align-self: flex-start;
+
+}
+
+.btnDeleteBattle:hover {
+
+    background: var(--color-danger);
+    color: #fff;
+
+}
+
+/* 전투 로그 (진한 브라운 박스 + 골드 글씨) */
+
+.battle-log {
+
+    background: var(--color-log-bg);
+    color: var(--color-log-text);
+
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+
+    max-height: 220px;
+    overflow-y: auto;
+
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+
+}
+
+/* ----------------------------------------
+   12. Footer
+   ---------------------------------------- */
+
+.footer {
+
+    text-align: center;
+    padding: 24px 12px;
+
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+
+    border-top: 2px solid var(--color-border);
+
+}
+
+/* ----------------------------------------
+   13. 반응형
+   ---------------------------------------- */
+
+@media (max-width: 640px) {
+
+    .header {
+
+        padding: 14px 18px;
+        flex-direction: column;
+        align-items: flex-start;
+
+    }
+
+    .container,
+    .main-container {
+
+        padding: 20px 16px 40px;
+
+    }
+
+    .card,
+    .info-panel {
+
+        padding: 16px 18px;
+
+    }
+
+}

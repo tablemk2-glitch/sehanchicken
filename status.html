@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>캐릭터 관리</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="header">
+    <h1>👤 러너 목록</h1>
+    <nav>
+        <a href="index.html">홈</a>
+        <a href="status.html" class="active">캐릭터 관리</a>
+        <a href="dice.html">다이스</a>
+        <a href="battle.html">전투</a>
+    </nav>
+</header>
+<main class="container">
+    <section class="card">
+        <h2>러너 추가 / 수정</h2>
+        <div class="form-grid form-grid-horizontal">
+            <input
+                type="hidden"
+                id="characterId">
+            <div class="field-name">
+                <label>이름</label>
+                <input
+                    type="text"
+                    id="name"
+                    placeholder="캐릭터 이름">
+            </div>
+            <div class="field-stat">
+                <label>근력</label>
+                <input type="number" id="strength" min="1" max="5" value="3">
+            </div>
+            <div class="field-stat">
+                <label>민첩</label>
+                <input type="number" id="agility" min="1" max="5" value="3">
+            </div>
+            <div class="field-stat">
+                <label>지능</label>
+                <input type="number" id="intelligence" min="1" max="5" value="3">
+            </div>
+            <div class="field-stat">
+                <label>행운</label>
+                <input type="number" id="luck" min="1" max="5" value="3">
+            </div>
+            <div class="field-stat">
+                <label>특기</label>
+                <input type="number" id="specialtyValue" min="1" max="5" value="3">
+            </div>
+            <div class="field-specialty">
+                <label>특기명</label>
+                <input
+                    type="text"
+                    id="specialty"
+                    placeholder="예: 해킹, 저격, 협상 등">
+            </div>
+            <div class="field-memo">
+                <label>비고</label>
+                <textarea
+                    id="memo"
+                    rows="2"
+                    placeholder="자유롭게 메모를 입력하세요"></textarea>
+            </div>
+        </div>
+        <div class="button-group">
+            <button id="btnSave">
+                저장
+            </button>
+            <button id="btnReset">
+                초기화
+            </button>
+        </div>
+    </section>
+    <section class="card">
+        <h2>캐릭터 목록</h2>
+        <table class="character-table">
+            <thead>
+            <tr>
+                <th>번호</th>
+                <th>이름</th>
+                <th>근력</th>
+                <th>민첩</th>
+                <th>지능</th>
+                <th>행운</th>
+                <th>특기</th>
+                <th>특기명</th>
+                <th>비고</th>
+                <th>관리</th>
+            </tr>
+            </thead>
+            <tbody id="characterTableBody">
+            <!-- status.js가 자동 생성 -->
+            </tbody>
+        </table>
+    </section>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/status.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

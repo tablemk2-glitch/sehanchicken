@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>전투</title>
+    <link rel="stylesheet"
+          href="css/style.css">
+    <style>
+        /* ========================= */
+        /* 플로팅 유틸리티 패널 */
+        /* ========================= */
+        .floating-panel {
+            position: fixed;
+            width: 260px;
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--border-color, #ddd);
+            border-radius: 10px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            overflow: hidden;
+            transition: height 0.2s ease;
+        }
+
+        #diceFloatingPanel {
+            right: 20px;
+            bottom: 20px;
+        }
+
+        #bodyPartFloatingPanel {
+            right: 300px;
+            bottom: 20px;
+        }
+
+        .floating-panel__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: var(--header-bg, #f2f2f2);
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.95rem;
+            user-select: none;
+        }
+
+        .floating-panel__minimize-btn {
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+
+        .floating-panel__body {
+            padding: 10px 12px 14px;
+        }
+
+        .floating-panel.minimized .floating-panel__body {
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            .floating-panel {
+                width: calc(100% - 40px);
+                left: 20px;
+                right: 20px;
+            }
+            #diceFloatingPanel {
+                bottom: 20px;
+            }
+            #bodyPartFloatingPanel {
+                bottom: 90px;
+            }
+        }
+
+        /* ========================= */
+        /* 전투 로그 저장 버튼 */
+        /* ========================= */
+        .btnSaveLog {
+            margin-left: 6px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border-color, #ccc);
+            border-radius: 6px;
+            background: var(--card-bg, #fff);
+            cursor: pointer;
+        }
+
+        .btnSaveLog:hover {
+            background: var(--header-bg, #f2f2f2);
+        }
+    </style>
+</head>
+<body>
+<header class="header">
+    <h1>⚔ 전투 관리</h1>
+    <nav>
+        <a href="index.html">홈</a>
+        <a href="status.html">캐릭터 관리</a>
+        <a href="dice.html">다이스</a>
+        <a href="battle.html" class="active">전투</a>
+    </nav>
+</header>
+<main class="container">
+    <!-- ========================= -->
+    <!-- 전투 생성 -->
+    <!-- ========================= -->
+    <section class="card">
+        <h2>새 전투 생성</h2>
+        <div class="battle-setting">
+            <div>
+                <label for="battleName">전투 이름</label>
+                <input
+                    type="text"
+                    id="battleName"
+                    placeholder="예) 학교 운동장">
+            </div>
+            <div>
+                <label for="zombieCount">좀비 수</label>
+                <input
+                    type="number"
+                    id="zombieCount"
+                    min="1"
+                    value="5">
+            </div>
+        </div>
+        <h3>참여 캐릭터</h3>
+        <div id="characterSelectList" class="character-select-list">
+            <!-- battle.js에서 체크박스 목록 생성 -->
+        </div>
+        <p class="hint-text">
+            좀비는 매 공격마다 생존한 참여 캐릭터 중 무작위로 대상을 지목합니다.
+        </p>
+        <br>
+        <button id="btnCreateBattle" class="btn-primary">
+            전투 생성
+        </button>
+    </section>
+    <!-- ========================= -->
+    <!-- 전투 목록 -->
+    <!-- ========================= -->
+    <section>
+        <h2>진행중인 전투</h2>
+        <div id="battleArea">
+            <!-- battle.js가 전투 카드 생성 -->
+            <!--
+            <div class="battle-card">
+            </div>
+            -->
+            <p class="placeholder-text" id="noBattlePlaceholder">
+                아직 생성된 전투가 없습니다.
+            </p>
+        </div>
+    </section>
+</main>
+
+<!-- ========================= -->
+<!-- 유틸리티: 간이 다이스 판정 (플로팅) -->
+<!-- ========================= -->
+<div id="diceFloatingPanel" class="floating-panel">
+    <div class="floating-panel__header" data-target="diceFloatingPanel">
+        <span>🎲 간이 다이스 판정</span>
+        <button type="button" class="floating-panel__minimize-btn" aria-label="최소화">
+            ▾
+        </button>
+    </div>
+    <div class="floating-panel__body">
+        <p class="hint-text">전투 흐름과 별개로 스탯 레벨만 골라 즉석 판정할 때 사용합니다.</p>
+        <label for="quickDiceStatLevel">스탯 레벨 (1~5)</label>
+        <select id="quickDiceStatLevel">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+        </select>
+        <button id="btnQuickDiceRoll">판정</button>
+        <p id="quickDiceResult" class="result-text"></p>
+    </div>
+</div>
+
+<!-- ========================= -->
+<!-- 유틸리티: 감염 부위 결정 (플로팅) -->
+<!-- ========================= -->
+<div id="bodyPartFloatingPanel" class="floating-panel">
+    <div class="floating-panel__header" data-target="bodyPartFloatingPanel">
+        <span>🧟 감염 부위 결정</span>
+        <button type="button" class="floating-panel__minimize-btn" aria-label="최소화">
+            ▾
+        </button>
+    </div>
+    <div class="floating-panel__body">
+        <p class="hint-text">감염이 확정된 캐릭터의 부위를 무작위로 결정합니다.</p>
+        <button id="btnPickBodyPart">부위 결정</button>
+        <p id="bodyPartResult" class="result-text"></p>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/diceEngine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/battle.js"></script>
+<script>
+    // ========================= //
+    // 플로팅 패널 최소화/펼치기 //
+    // ========================= //
+    (function () {
+        const STORAGE_KEY = 'floatingPanelState';
+
+        function loadState() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveState(state) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function applyMinimized(panel, minimized) {
+            panel.classList.toggle('minimized', minimized);
+            const btn = panel.querySelector('.floating-panel__minimize-btn');
+            btn.textContent = minimized ? '▸' : '▾';
+            btn.setAttribute('aria-label', minimized ? '펼치기' : '최소화');
+        }
+
+        const state = loadState();
+
+        document.querySelectorAll('.floating-panel').forEach((panel) => {
+            const id = panel.id;
+            const header = panel.querySelector('.floating-panel__header');
+            const btn = panel.querySelector('.floating-panel__minimize-btn');
+
+            applyMinimized(panel, !!state[id]);
+
+            function toggle() {
+                const nowMinimized = !panel.classList.contains('minimized');
+                applyMinimized(panel, nowMinimized);
+                state[id] = nowMinimized;
+                saveState(state);
+            }
+
+            header.addEventListener('click', toggle);
+            btn.addEventListener('click', (e) => e.stopPropagation());
+        });
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세한통닭 다이스</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- ===================== -->
+    <!-- Header (로고) -->
+    <!-- ===================== -->
+    <header class="header">
+        <div class="logo">
+            🎲 Dice Manager
+        </div>
+    </header>
+    <!-- ===================== -->
+    <!-- Main (메뉴) -->
+    <!-- ===================== -->
+    <main class="main-container">
+        <section class="menu-grid">
+            <a href="status.html" class="menu-card">
+                <div class="card-icon">
+                    👤
+                </div>
+                <h2>
+                    러너 목록
+                </h2>
+            </a>
+            <a href="dice.html" class="menu-card">
+                <div class="card-icon">
+                    🎲
+                </div>
+                <h2>
+                    다이스 판정
+                </h2>
+            </a>
+            <a href="battle.html" class="menu-card">
+                <div class="card-icon">
+                    ⚔
+                </div>
+                <h2>
+                    전투
+                </h2>
+            </a>
+        </section>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/diceEngine.js"></script>
+    <script src="js/ui.js"></script>
+</body>
+</html>

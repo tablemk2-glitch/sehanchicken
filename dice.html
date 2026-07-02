@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>다이스 판정</title>
+    <link rel="stylesheet"
+          href="css/style.css">
+</head>
+<body>
+<header class="header">
+    <h1>🎲 다이스 판정</h1>
+    <nav>
+        <a href="index.html">홈</a>
+        <a href="status.html">캐릭터 관리</a>
+        <a href="dice.html" class="active">다이스</a>
+        <a href="battle.html">전투</a>
+    </nav>
+</header>
+<main class="container">
+    <section class="card">
+        <h2>
+            판정 설정
+        </h2>
+        <div class="form-grid">
+            <div>
+                <label>
+                    사용할 스탯
+                </label>
+                <select id="statSelect">
+                    <option value="strength">근력</option>
+                    <option value="agility">민첩</option>
+                    <option value="intelligence">지능</option>
+                    <option value="luck">행운</option>
+                    <option value="specialty">특기</option>
+                </select>
+            </div>
+        </div>
+        <h3>캐릭터 선택</h3>
+        <div id="characterList">
+            <!-- dice.js에서 생성 -->
+        </div>
+        <br>
+        <button id="btnRoll">
+            판정하기
+        </button>
+    </section>
+    <section class="card">
+        <h2>
+            판정 결과
+        </h2>
+        <table class="character-table">
+            <thead>
+            <tr>
+                <th>이름</th>
+                <th>스탯</th>
+                <th>기준치</th>
+                <th>판정 결과</th>
+            </tr>
+            </thead>
+            <tbody id="resultTable">
+            </tbody>
+        </table>
+        <div class="result-copy-area">
+            <pre id="resultText" class="result-text-block"></pre>
+            <button id="btnCopyResult" type="button">
+                결과 복사
+            </button>
+        </div>
+    </section>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/diceEngine.js"></script>
+<script src="js/dice.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
