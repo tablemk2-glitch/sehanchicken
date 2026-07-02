@@ -5,94 +5,8 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
     <title>전투</title>
-    <link rel="stylesheet"
-          href="css/style.css">
-    <style>
-        /* ========================= */
-        /* 플로팅 유틸리티 패널 */
-        /* ========================= */
-        .floating-panel {
-            position: fixed;
-            width: 260px;
-            background: var(--card-bg, #fff);
-            border: 1px solid var(--border-color, #ddd);
-            border-radius: 10px;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
-            overflow: hidden;
-            transition: height 0.2s ease;
-        }
-
-        #diceFloatingPanel {
-            right: 20px;
-            bottom: 20px;
-        }
-
-        #bodyPartFloatingPanel {
-            right: 300px;
-            bottom: 20px;
-        }
-
-        .floating-panel__header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 12px;
-            background: var(--header-bg, #f2f2f2);
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.95rem;
-            user-select: none;
-        }
-
-        .floating-panel__minimize-btn {
-            border: none;
-            background: transparent;
-            font-size: 1rem;
-            line-height: 1;
-            cursor: pointer;
-            padding: 2px 6px;
-        }
-
-        .floating-panel__body {
-            padding: 10px 12px 14px;
-        }
-
-        .floating-panel.minimized .floating-panel__body {
-            display: none;
-        }
-
-        @media (max-width: 640px) {
-            .floating-panel {
-                width: calc(100% - 40px);
-                left: 20px;
-                right: 20px;
-            }
-            #diceFloatingPanel {
-                bottom: 20px;
-            }
-            #bodyPartFloatingPanel {
-                bottom: 90px;
-            }
-        }
-
-        /* ========================= */
-        /* 전투 로그 저장 버튼 */
-        /* ========================= */
-        .btnSaveLog {
-            margin-left: 6px;
-            padding: 6px 12px;
-            font-size: 0.85rem;
-            border: 1px solid var(--border-color, #ccc);
-            border-radius: 6px;
-            background: var(--card-bg, #fff);
-            cursor: pointer;
-        }
-
-        .btnSaveLog:hover {
-            background: var(--header-bg, #f2f2f2);
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/battle.css">
 </head>
 <body>
 <header class="header">
@@ -158,45 +72,89 @@
 </main>
 
 <!-- ========================= -->
-<!-- 유틸리티: 간이 다이스 판정 (플로팅) -->
+<!-- 플로팅 패널 컨테이너 -->
 <!-- ========================= -->
-<div id="diceFloatingPanel" class="floating-panel">
-    <div class="floating-panel__header" data-target="diceFloatingPanel">
-        <span>🎲 간이 다이스 판정</span>
-        <button type="button" class="floating-panel__minimize-btn" aria-label="최소화">
-            ▾
-        </button>
-    </div>
-    <div class="floating-panel__body">
-        <p class="hint-text">전투 흐름과 별개로 스탯 레벨만 골라 즉석 판정할 때 사용합니다.</p>
-        <label for="quickDiceStatLevel">스탯 레벨 (1~5)</label>
-        <select id="quickDiceStatLevel">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3" selected>3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-        </select>
-        <button id="btnQuickDiceRoll">판정</button>
-        <p id="quickDiceResult" class="result-text"></p>
-    </div>
-</div>
 
-<!-- ========================= -->
-<!-- 유틸리티: 감염 부위 결정 (플로팅) -->
-<!-- ========================= -->
-<div id="bodyPartFloatingPanel" class="floating-panel">
-    <div class="floating-panel__header" data-target="bodyPartFloatingPanel">
-        <span>🧟 감염 부위 결정</span>
-        <button type="button" class="floating-panel__minimize-btn" aria-label="최소화">
-            ▾
-        </button>
+<div class="floating-panel-container">
+
+    <!-- 감염 부위 -->
+    <div id="bodyPartFloatingPanel" class="floating-panel">
+
+        <div class="floating-panel__header"
+             data-target="bodyPartFloatingPanel">
+
+            <span>🧟 감염 부위 결정</span>
+
+            <button
+                type="button"
+                class="floating-panel__minimize-btn">
+                ▾
+            </button>
+
+        </div>
+
+        <div class="floating-panel__body">
+
+            <p class="hint-text">
+                감염이 확정된 캐릭터의 부위를 무작위로 결정합니다.
+            </p>
+
+            <button id="btnPickBodyPart">
+                부위 결정
+            </button>
+
+            <p id="bodyPartResult"
+               class="result-text"></p>
+
+        </div>
+
     </div>
-    <div class="floating-panel__body">
-        <p class="hint-text">감염이 확정된 캐릭터의 부위를 무작위로 결정합니다.</p>
-        <button id="btnPickBodyPart">부위 결정</button>
-        <p id="bodyPartResult" class="result-text"></p>
+
+    <!-- 간이 다이스 -->
+    <div id="diceFloatingPanel" class="floating-panel">
+
+        <div class="floating-panel__header"
+             data-target="diceFloatingPanel">
+
+            <span>🎲 간이 다이스 판정</span>
+
+            <button
+                type="button"
+                class="floating-panel__minimize-btn">
+                ▾
+            </button>
+
+        </div>
+
+        <div class="floating-panel__body">
+
+            <p class="hint-text">
+                전투 흐름과 별개로 스탯 레벨만 골라 즉석 판정할 때 사용합니다.
+            </p>
+
+            <label for="quickDiceStatLevel">
+                스탯 레벨 (1~5)
+            </label>
+
+            <select id="quickDiceStatLevel">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+
+            <button id="btnQuickDiceRoll">
+                판정
+            </button>
+
+            <p id="quickDiceResult"
+               class="result-text"></p>
+
+        </div>
+
     </div>
+
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
