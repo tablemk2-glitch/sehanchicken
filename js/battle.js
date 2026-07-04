@@ -149,6 +149,16 @@ const BattleManager = (() => {
 
     }
 
+    // 전환된 캐릭터는 원래 스탯(character.stats)을 그대로 사용,
+    // 일반 좀비는 기존처럼 고정 스탯 사용
+
+    function getZombieStatObject(zombie) {
+        if (zombie.stats) {
+            return { name: zombie.name, stats: zombie.stats };
+        }
+        return makeZombieStatObject(zombie);
+    }
+
     // ----------------------------------------
     // 캐릭터의 "특기 판정용" 임시 스탯 객체
     // (character.specialty는 이제 텍스트라 그대로 못 굴림)
@@ -451,6 +461,55 @@ const BattleManager = (() => {
 
     }
 
+// ============================================
+    // 캐릭터 → 좀비 진영 수동 전환 (진행자용)
+    // ============================================
+
+    function convertCharacterToZombieEnemy(battleId, characterId) {
+
+        const battle = getBattle(battleId);
+
+        if (!battle) return null;
+
+        const idx = battle.characters.findIndex(c => c.id === characterId);
+
+        if (idx === -1) return null;
+
+        const character = battle.characters[idx];
+
+        const turnedZombie = {
+
+            id: `T-${character.id}`,
+
+            name: `${character.name} (전환됨)`,
+
+            hits: 0,
+
+            requiredHits: ZOMBIE_REQUIRED_HITS,
+
+            alive: true,
+
+            isTurnedCharacter: true,
+
+            sourceCharacterId: character.id,
+
+            stats: { ...character.stats }
+
+        };
+
+        battle.zombies.push(turnedZombie);
+
+        battle.characters.splice(idx, 1);
+
+        battle.log.push(`⚠ ${character.name}이(가) 좀비로 전환되었습니다.`);
+
+        saveBattles();
+
+        return battle;
+
+    }
+
+    
     function resolveSpecialty(character, log) {
 
         // status.html에서 저장한 특기 레벨(character.stats.specialty)이 있으면
@@ -512,7 +571,7 @@ const BattleManager = (() => {
 
         log.push(`- 좀비 #${zombie.id} → ${target.name}을(를) 지목!`);
 
-        const zombieStatObj = makeZombieStatObject(zombie);
+        const zombieStatObj = getZombieStatObject(zombie);
 
         const attackResult = rollStat(zombieStatObj, "strength");
 
@@ -816,7 +875,7 @@ const BattleManager = (() => {
     // 반환
     // ============================================
 
-    return {
+return {
 
         loadBattles,
 
@@ -835,6 +894,8 @@ const BattleManager = (() => {
         rollStat,
 
         pickRandomBodyPart,
+
+        convertCharacterToZombieEnemy,
 
         BODY_PARTS,
 
@@ -1107,6 +1168,11 @@ function renderBattleCard(battle) {
 
         const row = document.createElement("div");
 
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.justifyContent = "space-between";
+        row.style.gap = "8px";
+
         const statusText2 = {
             alive: "생존",
             fled: "도주",
@@ -1117,9 +1183,39 @@ function renderBattleCard(battle) {
             ? ` / 감염부위: ${character.infections.map(i => i.part).join(", ")}`
             : "";
 
-        row.textContent =
+        const infoSpan = document.createElement("span");
+
+        infoSpan.textContent =
             `${character.name} - HP ${character.hp}/${character.maxHp} `
             + `(${statusText2})${infectionText}`;
+
+        row.appendChild(infoSpan);
+
+        if (battle.status === "ongoing") {
+
+            const btnConvert = document.createElement("button");
+
+            btnConvert.type = "button";
+            btnConvert.className = "btnConvertToZombie";
+            btnConvert.textContent = "🧟 좀비로 전환";
+
+            btnConvert.addEventListener("click", (e) => {
+
+                e.stopPropagation();
+
+                if (!confirm(`${character.name}을(를) 적대 진영(좀비)으로 전환하시겠습니까?\n이 행동은 되돌릴 수 없습니다.`)) {
+                    return;
+                }
+
+                BattleManager.convertCharacterToZombieEnemy(battle.id, character.id);
+
+                renderAllBattles();
+
+            });
+
+            row.appendChild(btnConvert);
+
+        }
 
         charListEl.appendChild(row);
 
