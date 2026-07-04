@@ -28,19 +28,14 @@ const DEFAULT_PROFILE = "img/default-profile.png";
 // ============================================
 
 async function getCharacters() {
-
     const snapshot = await db.collection(COLLECTION_NAME)
         .orderBy("createdAt")
         .get();
 
     return snapshot.docs.map(doc => ({
-
         id: doc.id,
-
         ...doc.data()
-
     }));
-
 }
 
 // ============================================
@@ -48,19 +43,15 @@ async function getCharacters() {
 // ============================================
 
 async function getCharacter(id) {
-
     const doc = await db.collection(COLLECTION_NAME)
         .doc(String(id))
         .get();
 
     if (!doc.exists) {
-
         return null;
-
     }
 
     return { id: doc.id, ...doc.data() };
-
 }
 
 // ============================================
@@ -68,11 +59,8 @@ async function getCharacter(id) {
 // ============================================
 
 async function addCharacter(character) {
-
     if (!character.profile || character.profile === "") {
-
         character.profile = DEFAULT_PROFILE;
-
     }
 
     character.createdAt =
@@ -81,7 +69,6 @@ async function addCharacter(character) {
     const docRef = await db.collection(COLLECTION_NAME).add(character);
 
     return { id: docRef.id, ...character };
-
 }
 
 // ============================================
@@ -89,31 +76,22 @@ async function addCharacter(character) {
 // ============================================
 
 async function updateCharacter(id, newData) {
-
     if (!newData.profile || newData.profile === "") {
-
         newData.profile = DEFAULT_PROFILE;
-
     }
 
     delete newData.id;
 
     try {
-
         await db.collection(COLLECTION_NAME)
             .doc(String(id))
             .set(newData, { merge: true });
 
         return true;
-
     }
-
     catch {
-
         return false;
-
     }
-
 }
 
 // ============================================
@@ -121,11 +99,9 @@ async function updateCharacter(id, newData) {
 // ============================================
 
 async function deleteCharacter(id) {
-
     await db.collection(COLLECTION_NAME)
         .doc(String(id))
         .delete();
-
 }
 
 // ============================================
@@ -133,15 +109,12 @@ async function deleteCharacter(id) {
 // ============================================
 
 async function clearCharacters() {
-
     const snapshot = await db.collection(COLLECTION_NAME).get();
 
     const batch = db.batch();
-
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
 
     await batch.commit();
-
 }
 
 // ============================================
@@ -149,11 +122,8 @@ async function clearCharacters() {
 // ============================================
 
 async function findCharacterByName(name) {
-
     const characters = await getCharacters();
-
     return characters.find(c => c.name === name);
-
 }
 
 // ============================================
@@ -161,70 +131,8 @@ async function findCharacterByName(name) {
 // ============================================
 
 async function existsCharacter(name) {
-
     const found = await findCharacterByName(name);
-
     return found !== undefined;
-
-}
-
-// ============================================
-// JSON Export (비동기)
-// ============================================
-
-async function exportCharacters() {
-
-    const characters = await getCharacters();
-
-    return JSON.stringify(
-
-        characters,
-
-        null,
-
-        4
-
-    );
-
-}
-
-// ============================================
-// JSON Import (비동기)
-// ============================================
-
-async function importCharacters(jsonText) {
-
-    try {
-
-        const list = JSON.parse(jsonText);
-
-        if (!Array.isArray(list)) {
-
-            return false;
-
-        }
-
-        await clearCharacters();
-
-        for (const character of list) {
-
-            delete character.id;
-            delete character.createdAt;
-
-            await addCharacter(character);
-
-        }
-
-        return true;
-
-    }
-
-    catch {
-
-        return false;
-
-    }
-
 }
 
 // ============================================
@@ -232,93 +140,52 @@ async function importCharacters(jsonText) {
 // ============================================
 
 async function createSampleCharacters() {
-
     await clearCharacters();
 
     await addCharacter({
-
         name: "홍길동",
-
         profile: DEFAULT_PROFILE,
-
         stats: {
-
             strength: 3,
-
             agility: 4,
-
             intelligence: 2,
-
             luck: 3
-
         },
-
         specialty: "쌍검술",
-
         specialtyValue: 4,
-
         specialtyDesc: "양손에 검을 들고 연속 공격을 가하는 근접 특기",
-
         memo: ""
-
     });
 
     await addCharacter({
-
         name: "김철수",
-
         profile: DEFAULT_PROFILE,
-
         stats: {
-
             strength: 4,
-
             agility: 2,
-
             intelligence: 3,
-
             luck: 2
-
         },
-
         specialty: "해킹",
-
         specialtyValue: 5,
-
         specialtyDesc: "보안 시스템을 우회하고 전자 장비를 원격으로 제어",
-
         memo: ""
-
     });
 
     await addCharacter({
-
         name: "이영희",
-
         profile: DEFAULT_PROFILE,
-
         stats: {
-
             strength: 2,
-
             agility: 5,
-
             intelligence: 4,
-
             luck: 5
-
         },
-
         specialty: "저격",
-
         specialtyValue: 4,
-
         specialtyDesc: "장거리에서 정밀 사격으로 목표를 제압",
-
         memo: ""
-
     });
-
 }
 
 // ============================================
@@ -326,11 +193,8 @@ async function createSampleCharacters() {
 // ============================================
 
 async function getCharacterCount() {
-
     const characters = await getCharacters();
-
     return characters.length;
-
 }
 
 // ============================================
@@ -338,23 +202,11 @@ async function getCharacterCount() {
 // ============================================
 
 async function sortCharactersByName() {
-
     const characters = await getCharacters();
-
     characters.sort((a, b) =>
-
-        a.name.localeCompare(
-
-            b.name,
-
-            "ko"
-
-        )
-
+        a.name.localeCompare(b.name, "ko")
     );
-
     return characters;
-
 }
 
 console.log("Firestore Storage Ready");
