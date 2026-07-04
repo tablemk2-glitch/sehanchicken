@@ -102,7 +102,7 @@ async function updateCharacter(id, newData) {
 
         await db.collection(COLLECTION_NAME)
             .doc(String(id))
-            .set(newData, { merge: false });
+            .set(newData, { merge: true });
 
         return true;
 
