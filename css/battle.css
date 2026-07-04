@@ -16,7 +16,7 @@
         }
         
         .floating-panel {
-            width: 260px;
+            width: 210px;
             background: var(--card-bg, #fff);
             border: 1px solid var(--border-color, #ddd);
             border-radius: 10px;
@@ -87,7 +87,31 @@
         }
 
 
-
+        /* ========================= */
+        /* 캐릭터 → 좀비 전환 버튼 */
+        /* ========================= */
+        .btnConvertToZombie {
+        
+            margin-left: 6px;
+            padding: 4px 10px;
+            font-size: 0.78rem;
+            flex-shrink: 0;
+        
+            border: 1px solid var(--color-danger, #c81119);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--color-danger, #c81119);
+        
+            cursor: pointer;
+        
+        }
+        
+        .btnConvertToZombie:hover {
+        
+            background: var(--color-danger, #c81119);
+            color: #fff;
+        
+        }
 
 
 
