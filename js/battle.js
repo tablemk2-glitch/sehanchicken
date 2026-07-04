@@ -340,7 +340,9 @@ const BattleManager = (() => {
 
     function resolveAttack(battle, character, zombieId, log, summary) {
 
-        const zombie = battle.zombies.find(z => z.id === zombieId && z.alive);
+        // z.id는 일반 좀비는 숫자, 전환된 좀비는 문자열("T-...")이라
+        // 타입이 다를 수 있으므로 문자열로 통일해서 비교
+        const zombie = battle.zombies.find(z => String(z.id) === String(zombieId) && z.alive);
 
         if (!zombie) {
 
@@ -1296,7 +1298,9 @@ function renderRoundControls(battle) {
 
             const type = row.querySelector(".actionType").value;
 
-            const targetZombieId = Number(row.querySelector(".actionTargetZombie").value);
+            // 전환된 좀비는 id가 문자열("T-...")이라 Number()로 변환하면 NaN이 되어
+            // 대상을 못 찾는 버그가 있었음 → 원본 문자열 값을 그대로 사용
+            const targetZombieId = row.querySelector(".actionTargetZombie").value;
 
             actions[characterId] = { type, targetZombieId };
 
