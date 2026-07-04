@@ -3,7 +3,11 @@
 // Zombie Battle Manager
 // ============================================
 //
-// 의존성: storage.js (getCharacters 등, Firestore 비동기), diceEngine.js (DiceEngine)
+// [수정 사항 - 이번 변경]
+// - 캐릭터를 좀비로 전환할 때 이름 뒤에 붙던 "(전환됨)" 표기를 제거하고,
+//   전환된 좀비도 원래 캐릭터 이름을 그대로 표시하도록 변경했습니다.
+//   (convertCharacterToZombieEnemy, renderBattleCard의 좀비 목록,
+//    renderRoundControls의 공격 대상 좀비 선택 목록 3곳 반영)
 //
 // [설계상 가정 - 원문에 명시되지 않아 임의로 정한 값들]
 // 1) 좀비 공격 데미지: 성공/어려운 성공 = 2, 극단적 성공 = 4,
@@ -31,16 +35,9 @@
 //
 // [전투 데이터 저장 방식]
 // 전투(battle) 자체의 진행 상태는 여전히 localStorage에 저장합니다.
-// (캐릭터 원본 정보만 Firestore에서 불러오고, 진행중인 전투는
-//  세션성 데이터로 보고 기존 방식을 유지했습니다. 이것도 Firestore로
-//  옮기고 싶으면 알려주세요.)
 //
 // [전투 로그 저장 기능]
 // 각 전투 카드에 "전투 로그 저장" 버튼을 추가했습니다.
-// 클릭 시 해당 전투의 battle.log 전체와 최종 캐릭터 상태를
-// .txt 파일로 다운로드합니다. 새 전투를 생성하면 카드가
-// renderBattleCard()로 그려질 때 버튼도 함께 생성되므로
-// 별도 조작 없이 항상 노출됩니다.
 // ============================================
 
 const BattleManager = (() => {
@@ -67,8 +64,6 @@ const BattleManager = (() => {
         "극단적 성공": 4,
         "대성공": 6
     };
-
-    // 성공 등급 우선순위 (대항 판정용, 숫자가 클수록 상위 등급)
 
     const RANK_ORDER = {
         "대성공": 4,
@@ -161,7 +156,6 @@ const BattleManager = (() => {
 
     // ----------------------------------------
     // 캐릭터의 "특기 판정용" 임시 스탯 객체
-    // (character.specialty는 이제 텍스트라 그대로 못 굴림)
     // ----------------------------------------
 
     function makeSpecialtyRollObject(character) {
@@ -230,9 +224,6 @@ const BattleManager = (() => {
 
                 alive: true
 
-                // targetId 없음: 공격할 때마다 생존 캐릭터 중 무작위로 지목
-                // (도주/전투불능 상태 캐릭터는 지목 대상에서 제외)
-
             });
 
         }
@@ -293,8 +284,6 @@ const BattleManager = (() => {
 
     }
 
-    // 판정 결과를 "[주사위값/등급]" 형식으로 표기
-
     function formatRoll(result) {
 
         return `[${result.dice}/${result.rank}]`;
@@ -302,13 +291,7 @@ const BattleManager = (() => {
     }
 
     // ----------------------------------------
-    // 대항 판정 (예: 좀비 공격 vs 캐릭터 회피)
-    //
-    // - 방어측이 판정에 실패하면 무조건 공격측 승리
-    // - 양측 모두 성공했다면 등급이 더 높은 쪽이 승리
-    //   (대성공 > 극단적 성공 > 어려운 성공 > 성공)
-    // - 등급까지 같다면 판정에 쓰인 스탯값이 더 높은 쪽이 승리
-    // - 스탯값까지 같다면 방어측이 승리 (회피 우선)
+    // 대항 판정
     // ----------------------------------------
 
     function resolveContest(attackResult, attackStatValue, defenseResult, defenseStatValue) {
@@ -403,17 +386,19 @@ const BattleManager = (() => {
 
         }
 
+        const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+
         if (zombie.hits >= zombie.requiredHits) {
 
             zombie.alive = false;
 
-            log.push(`  → 좀비 #${zombie.id} 전투불능!`);
+            log.push(`  → ${zombieDisplayName} 전투불능!`);
 
         }
 
         else {
 
-            log.push(`  → 좀비 #${zombie.id} 피해 누적 (${zombie.hits}/${zombie.requiredHits})`);
+            log.push(`  → ${zombieDisplayName} 피해 누적 (${zombie.hits}/${zombie.requiredHits})`);
 
         }
 
@@ -461,7 +446,7 @@ const BattleManager = (() => {
 
     }
 
-// ============================================
+    // ============================================
     // 캐릭터 → 좀비 진영 수동 전환 (진행자용)
     // ============================================
 
@@ -481,7 +466,7 @@ const BattleManager = (() => {
 
             id: `T-${character.id}`,
 
-            name: `${character.name} (전환됨)`,
+            name: character.name, // 이름 그대로 유지 ("(전환됨)" 접미사 제거)
 
             hits: 0,
 
@@ -509,11 +494,8 @@ const BattleManager = (() => {
 
     }
 
-    
-    function resolveSpecialty(character, log) {
 
-        // status.html에서 저장한 특기 레벨(character.stats.specialty)이 있으면
-        // 그 값을 그대로 사용하고, 없을 때만 임시 고정 레벨로 대체 판정
+    function resolveSpecialty(character, log) {
 
         const hasStoredLevel =
             character.stats &&
@@ -552,24 +534,23 @@ const BattleManager = (() => {
 
     function resolveZombieAttack(battle, zombie, log, summary) {
 
-        // 도주로 전투를 이탈했거나(fled) 이미 전투불능(down)인 캐릭터는
-        // 지목 대상에서 제외 - "alive" 상태만 대상
-
         const aliveCharacters = battle.characters.filter(c => c.status === "alive");
 
         if (aliveCharacters.length === 0) {
 
-            log.push(`- 좀비 #${zombie.id}: 공격 가능한 대상 없음`);
+            const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+
+            log.push(`- ${zombieDisplayName}: 공격 가능한 대상 없음`);
 
             return;
 
         }
 
-        // 참여 캐릭터 중 무작위로 지목 (매 공격마다 새로 지목)
-
         const target = DiceEngine.randomChoice(aliveCharacters);
 
-        log.push(`- 좀비 #${zombie.id} → ${target.name}을(를) 지목!`);
+        const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+
+        log.push(`- ${zombieDisplayName} → ${target.name}을(를) 지목!`);
 
         const zombieStatObj = getZombieStatObject(zombie);
 
@@ -579,7 +560,7 @@ const BattleManager = (() => {
 
         if (summary) {
 
-            summary.zombieAttacks.push(`좀비 #${zombie.id} 공격 판정 ${formatRoll(attackResult)}`);
+            summary.zombieAttacks.push(`${zombieDisplayName} 공격 판정 ${formatRoll(attackResult)}`);
 
         }
 
@@ -590,8 +571,6 @@ const BattleManager = (() => {
             return;
 
         }
-
-        // 공격 판정 성공 시, 대상 캐릭터의 회피 판정 실시 (대항 판정)
 
         const evadeResult = rollStat(target, "agility");
 
@@ -609,8 +588,6 @@ const BattleManager = (() => {
             evadeResult,
             target.stats.agility
         );
-
-        // 회피 판정 자체가 대실패라면 대항 결과와 무관하게 추가 페널티
 
         if (evadeResult.rank === "대실패") {
 
@@ -639,8 +616,6 @@ const BattleManager = (() => {
             return;
 
         }
-
-        // winner === "attacker"
 
         log.push(
             evadeResult.success
@@ -718,9 +693,6 @@ const BattleManager = (() => {
 
         const log = [];
 
-        // 라운드 종료 시 순서별(캐릭터 공격 → 좀비 공격 → 캐릭터 회피 → 캐릭터 행운)로
-        // 판정 결과만 모아서 다시 출력하기 위한 요약 버킷
-
         const roundSummary = {
             attacks: [],
             flees: [],
@@ -730,8 +702,6 @@ const BattleManager = (() => {
         };
 
         log.push(`===== ${battle.round} 라운드 =====`);
-
-        // 1) 러너 공격 페이즈
 
         if (!skipRunnerPhase) {
 
@@ -779,8 +749,6 @@ const BattleManager = (() => {
 
         }
 
-        // 2) 좀비 공격 페이즈
-
         log.push(`[좀비 페이즈]`);
 
         battle.zombies.forEach(zombie => {
@@ -790,8 +758,6 @@ const BattleManager = (() => {
             resolveZombieAttack(battle, zombie, log, roundSummary);
 
         });
-
-        // 2.5) 라운드 종료 요약 (캐릭터 공격 → 좀비 공격 → 캐릭터 회피 → 캐릭터 행운 순)
 
         log.push(`----- ${battle.round}라운드 판정 요약 -----`);
 
@@ -836,8 +802,6 @@ const BattleManager = (() => {
         }
 
         battle.log.push(...log);
-
-        // 3) 종료 조건 체크
 
         const allZombiesDead = battle.zombies.every(z => !z.alive);
 
@@ -977,7 +941,7 @@ async function renderCharacterSelectList() {
 }
 
 // ----------------------------------------
-// 선택된 캐릭터 id 목록 (문자열 id 그대로 사용)
+// 선택된 캐릭터 id 목록
 // ----------------------------------------
 
 function getSelectedCharacterIds() {
@@ -1064,8 +1028,6 @@ function renderAllBattles() {
 
 }
 
-// 전투 카드별 접기/펼치기 상태 (라운드 진행 등으로 카드가 다시 그려져도 유지)
-
 const collapsedBattleIds = new Set();
 
 function renderBattleCard(battle) {
@@ -1118,7 +1080,7 @@ function renderBattleCard(battle) {
 
     headerEl.addEventListener("click", (e) => {
 
-        if (e.target === toggleBtn) return; // 버튼 클릭은 버튼 리스너가 처리
+        if (e.target === toggleBtn) return;
 
         toggleCollapse();
 
@@ -1154,8 +1116,13 @@ function renderBattleCard(battle) {
 
         const row = document.createElement("div");
 
+        // 전환된 캐릭터는 원래 이름을 그대로, 일반 좀비는 "좀비 #n" 표기
+        const zombieLabel = zombie.isTurnedCharacter
+            ? zombie.name
+            : `좀비 #${zombie.id}`;
+
         row.textContent =
-            `좀비 #${zombie.id} - ${zombie.alive ? "생존" : "전투불능"} `
+            `${zombieLabel} - ${zombie.alive ? "생존" : "전투불능"} `
             + `(피해 ${zombie.hits}/${zombie.requiredHits})`;
 
         zombieListEl.appendChild(row);
@@ -1279,8 +1246,12 @@ function renderRoundControls(battle) {
 
         row.dataset.characterId = character.id;
 
+        // 전환된 캐릭터는 원래 이름을, 일반 좀비는 "좀비 #n"으로 표기
         const zombieOptions = aliveZombies
-            .map(z => `<option value="${z.id}">좀비 #${z.id}</option>`)
+            .map(z => {
+                const label = z.isTurnedCharacter ? z.name : `좀비 #${z.id}`;
+                return `<option value="${z.id}">${label}</option>`;
+            })
             .join("");
 
         row.innerHTML = `
@@ -1419,8 +1390,6 @@ function saveBattleLogToFile(battle) {
 
 function wireUtilityPanels() {
 
-    // ---------- 간이 다이스 판정 (battle.html에 이미 마크업 존재) ----------
-
     const btnQuickDiceRoll = document.getElementById("btnQuickDiceRoll");
 
     if (btnQuickDiceRoll) {
@@ -1437,8 +1406,6 @@ function wireUtilityPanels() {
                 `[${result.dice}/${result.rank}]`;
         });
     }
-
-    // ---------- 감염 부위 결정 (battle.html에 이미 마크업 존재) ----------
 
     const btnPickBodyPart = document.getElementById("btnPickBodyPart");
     if (btnPickBodyPart) {
