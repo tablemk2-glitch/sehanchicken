@@ -114,20 +114,24 @@ function rollSelected() {
         document.getElementById("resultTable");
     tbody.innerHTML = "";
     const resultLines = [];
-    characters.forEach(character => {
-        const result =
-            DiceEngine.rollCharacter(
-                character,
-                statName
-            );
-        addResultRow(
-            tbody,
-            result
+     characters.forEach(character => {
+    const characterForRoll =
+        (statName === "specialty")
+            ? { ...character, stats: { ...character.stats, specialty: character.specialtyValue } }
+            : character;
+    const result =
+        DiceEngine.rollCharacter(
+            characterForRoll,
+            statName
         );
-        resultLines.push(
-            `${result.name} [${result.dice}/${result.rank}]`
-        );
-    });
+    addResultRow(
+        tbody,
+        result
+    );
+    resultLines.push(
+        `${result.name} [${result.dice}/${result.rank}]`
+    );
+});
     document.getElementById("resultText").textContent =
         resultLines.join("\n");
 }
