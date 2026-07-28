@@ -509,6 +509,46 @@ function setCharacterHp(battleId, characterId, newHp) {
 }
 
 
+// ★ 추가: 감염 수동 추가 (GM용)
+function addCharacterInfection(battleId, characterId, part) {
+
+    const battle = getBattle(battleId);
+    if (!battle) return null;
+    const character = battle.characters.find(c => c.id === characterId);
+    if (!character) return null;
+
+    const usedPart = part || pickRandomBodyPart();
+
+    character.infections.push({ part: usedPart, round: battle.round });
+
+    battle.log.push(`⚙ [수동 조정] ${character.name} 감염 부위 추가: ${usedPart}`);
+
+    saveBattles();
+    return battle;
+
+}
+
+// ★ 추가: 감염 수동 제거 (GM용)
+function removeCharacterInfection(battleId, characterId, infectionIndex) {
+
+    const battle = getBattle(battleId);
+    if (!battle) return null;
+    const character = battle.characters.find(c => c.id === characterId);
+    if (!character) return null;
+
+    const removed = character.infections[infectionIndex];
+    if (!removed) return null;
+
+    character.infections.splice(infectionIndex, 1);
+
+    battle.log.push(`⚙ [수동 조정] ${character.name} 감염 부위 제거: ${removed.part}`);
+
+    saveBattles();
+    return battle;
+
+}
+
+    
   function resolveSpecialty(character, log) {
 
         const rollObject = {
@@ -857,8 +897,10 @@ return {
         rollStat,
         pickRandomBodyPart,
         convertCharacterToZombieEnemy,
-        setZombieHits,      // ★ 추가
-        setCharacterHp,      // ★ 추가
+        setZombieHits,
+        setCharacterHp,
+        addCharacterInfection,      // ★ 추가
+        removeCharacterInfection,   // ★ 추가
         BODY_PARTS,
         ZOMBIE_STAT_LEVEL,
         CHARACTER_MAX_HP
@@ -1105,28 +1147,74 @@ function renderBattleCard(battle) {
 
         });
 
-    const zombieListEl = card.querySelector(".zombie-list");
+const zombieListEl = card.querySelector(".zombie-list");
 
     battle.zombies.forEach(zombie => {
 
         const row = document.createElement("div");
+
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.gap = "8px";
+        row.style.marginBottom = "4px";
 
         // 전환된 캐릭터는 원래 이름을 그대로, 일반 좀비는 "좀비 #n" 표기
         const zombieLabel = zombie.isTurnedCharacter
             ? zombie.name
             : `좀비 #${zombie.id}`;
 
-        row.textContent =
+        const infoSpan = document.createElement("span");
+
+        infoSpan.textContent =
             `${zombieLabel} - ${zombie.alive ? "생존" : "전투불능"} `
             + `(피해 ${zombie.hits}/${zombie.requiredHits})`;
+
+        row.appendChild(infoSpan);
+
+        if (battle.status === "ongoing") {
+
+            const hitsInput = document.createElement("input");
+
+            hitsInput.type = "number";
+            hitsInput.min = "0";
+            hitsInput.max = String(zombie.requiredHits);
+            hitsInput.value = String(zombie.hits);
+            hitsInput.style.width = "50px";
+
+            const btnApplyHits = document.createElement("button");
+
+            btnApplyHits.type = "button";
+            btnApplyHits.textContent = "피해 적용";
+
+            btnApplyHits.addEventListener("click", (e) => {
+
+                e.stopPropagation();
+
+                BattleManager.setZombieHits(battle.id, zombie.id, hitsInput.value);
+
+                renderAllBattles();
+
+            });
+
+            row.appendChild(hitsInput);
+            row.appendChild(btnApplyHits);
+
+        }
 
         zombieListEl.appendChild(row);
 
     });
 
-    const charListEl = card.querySelector(".character-list");
+const charListEl = card.querySelector(".character-list");
 
     battle.characters.forEach(character => {
+
+        const wrapper = document.createElement("div");
+
+        wrapper.style.border = "1px solid #333";
+        wrapper.style.borderRadius = "4px";
+        wrapper.style.padding = "6px";
+        wrapper.style.marginBottom = "6px";
 
         const row = document.createElement("div");
 
@@ -1134,6 +1222,7 @@ function renderBattleCard(battle) {
         row.style.alignItems = "center";
         row.style.justifyContent = "space-between";
         row.style.gap = "8px";
+        row.style.flexWrap = "wrap";
 
         const statusText2 = {
             alive: "생존",
@@ -1141,19 +1230,42 @@ function renderBattleCard(battle) {
             down: "전투불능"
         }[character.status];
 
-        const infectionText = character.infections.length > 0
-            ? ` / 감염부위: ${character.infections.map(i => i.part).join(", ")}`
-            : "";
-
         const infoSpan = document.createElement("span");
 
         infoSpan.textContent =
             `${character.name} - HP ${character.hp}/${character.maxHp} `
-            + `(${statusText2})${infectionText}`;
+            + `(${statusText2})`;
 
         row.appendChild(infoSpan);
 
         if (battle.status === "ongoing") {
+
+            // ★ 추가: HP 수동 조정
+            const hpInput = document.createElement("input");
+
+            hpInput.type = "number";
+            hpInput.min = "0";
+            hpInput.max = String(character.maxHp);
+            hpInput.value = String(character.hp);
+            hpInput.style.width = "50px";
+
+            const btnApplyHp = document.createElement("button");
+
+            btnApplyHp.type = "button";
+            btnApplyHp.textContent = "HP 적용";
+
+            btnApplyHp.addEventListener("click", (e) => {
+
+                e.stopPropagation();
+
+                BattleManager.setCharacterHp(battle.id, character.id, hpInput.value);
+
+                renderAllBattles();
+
+            });
+
+            row.appendChild(hpInput);
+            row.appendChild(btnApplyHp);
 
             const btnConvert = document.createElement("button");
 
@@ -1179,9 +1291,108 @@ function renderBattleCard(battle) {
 
         }
 
-        charListEl.appendChild(row);
+        wrapper.appendChild(row);
+
+        // ★ 추가: 감염 부위 수동 관리 영역
+        const infectionRow = document.createElement("div");
+
+        infectionRow.style.marginTop = "4px";
+        infectionRow.style.display = "flex";
+        infectionRow.style.alignItems = "center";
+        infectionRow.style.flexWrap = "wrap";
+        infectionRow.style.gap = "6px";
+
+        const infectionLabel = document.createElement("span");
+
+        infectionLabel.style.color = "#a55";
+
+        infectionLabel.textContent = character.infections.length > 0
+            ? `감염부위: `
+            : `감염 없음`;
+
+        infectionRow.appendChild(infectionLabel);
+
+        character.infections.forEach((infection, index) => {
+
+            const tag = document.createElement("span");
+
+            tag.style.background = "#402020";
+            tag.style.padding = "2px 6px";
+            tag.style.borderRadius = "3px";
+            tag.style.display = "inline-flex";
+            tag.style.alignItems = "center";
+            tag.style.gap = "4px";
+
+            tag.textContent = `${infection.part} (${infection.round}R)`;
+
+            if (battle.status === "ongoing") {
+
+                const btnRemove = document.createElement("button");
+
+                btnRemove.type = "button";
+                btnRemove.textContent = "✕";
+                btnRemove.title = "감염 제거";
+                btnRemove.style.fontSize = "10px";
+
+                btnRemove.addEventListener("click", (e) => {
+
+                    e.stopPropagation();
+
+                    BattleManager.removeCharacterInfection(battle.id, character.id, index);
+
+                    renderAllBattles();
+
+                });
+
+                tag.appendChild(btnRemove);
+
+            }
+
+            infectionRow.appendChild(tag);
+
+        });
+
+        if (battle.status === "ongoing") {
+
+            const partSelect = document.createElement("select");
+
+            BattleManager.BODY_PARTS.forEach(part => {
+
+                const option = document.createElement("option");
+
+                option.value = part;
+                option.textContent = part;
+
+                partSelect.appendChild(option);
+
+            });
+
+            const btnAddInfection = document.createElement("button");
+
+            btnAddInfection.type = "button";
+            btnAddInfection.textContent = "감염 추가";
+
+            btnAddInfection.addEventListener("click", (e) => {
+
+                e.stopPropagation();
+
+                BattleManager.addCharacterInfection(battle.id, character.id, partSelect.value);
+
+                renderAllBattles();
+
+            });
+
+            infectionRow.appendChild(partSelect);
+            infectionRow.appendChild(btnAddInfection);
+
+        }
+
+        wrapper.appendChild(infectionRow);
+
+        charListEl.appendChild(wrapper);
 
     });
+    
 
     if (battle.status === "ongoing") {
 
