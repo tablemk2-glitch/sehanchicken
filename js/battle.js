@@ -154,26 +154,6 @@ const BattleManager = (() => {
         return makeZombieStatObject(zombie);
     }
 
-    // ----------------------------------------
-    // 캐릭터의 "특기 판정용" 임시 스탯 객체
-    // ----------------------------------------
-
-    function makeSpecialtyRollObject(character) {
-
-        return {
-
-            name: character.name,
-
-            stats: {
-
-                specialty: SPECIALTY_FALLBACK_LEVEL
-
-            }
-
-        };
-
-    }
-
     // ============================================
     // 전투 생성 (비동기: Firestore에서 캐릭터 원본을 가져옴)
     // ============================================
@@ -183,33 +163,37 @@ const BattleManager = (() => {
         const source = await getCharacters();
 
         const battleCharacters = characterIds.map(id => {
-
+        
             const original = source.find(c => c.id === id);
-
+        
             return {
-
+        
                 id: original.id,
-
+        
                 name: original.name,
-
+        
                 profile: original.profile,
-
+        
                 stats: { ...original.stats },
-
+        
                 specialty: original.specialty || "",
-
+        
+                specialtyValue: typeof original.specialtyValue === "number"
+                    ? original.specialtyValue
+                    : null,
+        
                 hp: CHARACTER_MAX_HP,
-
+        
                 maxHp: CHARACTER_MAX_HP,
-
-                status: "alive", // alive | fled | down
-
+        
+                status: "alive",
+        
                 infections: []
-
+        
             };
-
+        
         });
-
+        
         const zombies = [];
 
         for (let i = 1; i <= zombieCount; i++) {
@@ -498,36 +482,45 @@ const BattleManager = (() => {
 
 
     function resolveSpecialty(character, log) {
-
-        const hasStoredLevel =
-            character.stats &&
-            typeof character.stats.specialty === "number" &&
-            !Number.isNaN(character.stats.specialty);
-
-        const rollObject = hasStoredLevel
-            ? character
-            : makeSpecialtyRollObject(character);
-
+    
+        let level = SPECIALTY_FALLBACK_LEVEL;
+        let usedFallback = true;
+    
+        if (typeof character.specialtyValue === "number" && !Number.isNaN(character.specialtyValue)) {
+    
+            level = character.specialtyValue;
+            usedFallback = false;
+    
+        }
+    
+        const rollObject = {
+    
+            name: character.name,
+    
+            stats: { specialty: level }
+    
+        };
+    
         const result = rollStat(rollObject, "specialty");
-
+    
         const specialtyLabel = character.specialty
             ? `특기(${character.specialty})`
             : "특기";
-
+    
         log.push(`- ${character.name} ${specialtyLabel} 판정 ${formatRoll(result)}`);
-
-        if (!hasStoredLevel) {
-
-            log.push(`  (⚠ status.html에 저장된 특기 레벨이 없어 임시 레벨 ${SPECIALTY_FALLBACK_LEVEL} 사용)`);
-
+    
+        if (usedFallback) {
+    
+            log.push(`  (⚠ 저장된 특기 레벨이 없어 임시 레벨 ${SPECIALTY_FALLBACK_LEVEL} 사용)`);
+    
         }
-
+    
         log.push(
             result.success
                 ? `  → 특기 성공 (효과는 별도 규칙에 따라 GM이 적용)`
                 : `  → 특기 실패`
         );
-
+    
     }
 
     // ============================================
