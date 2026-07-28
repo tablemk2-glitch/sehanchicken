@@ -15,22 +15,18 @@
 // 2) 감염 판정: 어려운 성공 이상 피격 시 행운 판정 실시,
 //    행운 판정 "실패" 시 감염, "성공" 시 저항(감염 안 됨).
 //    단, 좀비가 대성공을 낸 경우 행운 판정 없이 무조건 감염.
-// 3) 특기 판정: status.js 개편으로 캐릭터의 특기가 숫자 스탯이 아니라
-//    텍스트(예: "해킹")로 바뀌었습니다. 판정용 숫자가 없으므로
-//    임시로 고정 레벨(SPECIALTY_FALLBACK_LEVEL = 3, 기준치 50)로 굴립니다.
-//    ⚠️ 이 처리가 맞는지 확인 필요 — 다른 방식을 원하면 알려주세요.
-// 4) 좀비 지목 방식: 매 공격마다 "도주"/"전투불능" 상태가 아닌
+// 3) 좀비 지목 방식: 매 공격마다 "도주"/"전투불능" 상태가 아닌
 //    생존 캐릭터 중에서 무작위로 새로 지목합니다(고정 타겟 없음).
 //    도주로 전투를 이탈했거나 이미 전투불능인 캐릭터는 대상에서 제외됩니다.
-// 5) HP 0 처리: 좀비/캐릭터 모두 "사망"이 아니라 "전투불능"으로 표기합니다.
-// 6) 판정 표기: 모든 판정 로그는 "[주사위값/등급]" 형식으로 표기합니다.
+// 4) HP 0 처리: 좀비/캐릭터 모두 "사망"이 아니라 "전투불능"으로 표기합니다.
+// 5) 판정 표기: 모든 판정 로그는 "[주사위값/등급]" 형식으로 표기합니다.
 //    예) [26/어려운 성공]
-// 7) 대항 판정(예: 좀비 공격 vs 캐릭터 회피): 등급 순서는
+// 6) 대항 판정(예: 좀비 공격 vs 캐릭터 회피): 등급 순서는
 //    대성공 > 극단적 성공 > 어려운 성공 > 성공 > 실패 > 대실패 입니다.
 //    양측 모두 판정에 성공하더라도 등급이 더 낮은 쪽은 대항에서 패배한
 //    것으로 처리합니다. 등급이 같다면 해당 판정에 쓰인 스탯값이 더 높은
 //    쪽이 승리하며, 스탯값까지 같다면 방어측(회피)이 승리합니다.
-// 8) 회피 판정에서 "대실패"가 나오면 추가 페널티로 HP -1이 적용됩니다.
+// 7) 회피 판정에서 "대실패"가 나오면 추가 페널티로 HP -1이 적용됩니다.
 //    (러너의 도주 판정, 캐릭터의 피격 회피 판정 모두 동일하게 적용)
 //
 // [전투 데이터 저장 방식]
@@ -47,15 +43,9 @@ const BattleManager = (() => {
     // ----------------------------------------
 
     const CHARACTER_MAX_HP = 10;
-
     const ZOMBIE_STAT_LEVEL = 3; // 좀비 스탯 33333 (기준치 50)
-
-    const SPECIALTY_FALLBACK_LEVEL = 3; // 특기가 텍스트화되어 임시로 쓰는 판정 레벨
-
     const ZOMBIE_REQUIRED_HITS = 3;
-
     const INFECTION_CAPABLE_RANKS = ["어려운 성공", "극단적 성공", "대성공"];
-
     const DAMAGE_TABLE = {
         "실패": 0,
         "대실패": 0,
@@ -417,12 +407,30 @@ const BattleManager = (() => {
         }
     }
 
- function resolveAssistEvade(character, targetCharacter, log, summary) {
-  
-        log.push(`- ${character.name}: ${targetCharacter.name}의 회피를 보조 (이번 라운드 자동 회피 성공 처리)`);
+function resolveAssistEvade(character, targetCharacter, log, summary) {
+
+    const result = rollStat(character, "agility");
+
+    log.push(`- ${character.name} → ${targetCharacter.name} 회피 보조 판정(민첩) ${formatRoll(result)}`);
+
     if (summary) {
-        summary.assists.push(`${character.name} → ${targetCharacter.name} 회피 보조`);
+        summary.assists.push(`${character.name} → ${targetCharacter.name} 회피 보조 판정 ${formatRoll(result)}`);
     }
+
+    if (result.success) {
+
+        log.push(`  → 보조 성공! ${targetCharacter.name}은(는) 이번 라운드 자동 회피 확보`);
+
+    }
+
+    else {
+
+        log.push(`  → 보조 실패, ${targetCharacter.name}에게 자동 회피 제공 못함 (다른 동료가 성공했다면 여전히 유효)`);
+
+    }
+
+    return result.success;
+
 }
 
     // ============================================
@@ -501,278 +509,233 @@ function setCharacterHp(battleId, characterId, newHp) {
 }
 
 
-    function resolveSpecialty(character, log) {
-    
-        let level = SPECIALTY_FALLBACK_LEVEL;
-        let usedFallback = true;
-    
-        if (typeof character.specialtyValue === "number" && !Number.isNaN(character.specialtyValue)) {
-    
-            level = character.specialtyValue;
-            usedFallback = false;
-    
-        }
-    
+  function resolveSpecialty(character, log) {
+
         const rollObject = {
-    
+
             name: character.name,
-    
-            stats: { specialty: level }
-    
+
+            stats: { specialty: character.specialtyValue }
+
         };
-    
+
         const result = rollStat(rollObject, "specialty");
-    
+
         const specialtyLabel = character.specialty
             ? `특기(${character.specialty})`
             : "특기";
-    
+
         log.push(`- ${character.name} ${specialtyLabel} 판정 ${formatRoll(result)}`);
-    
-        if (usedFallback) {
-    
-            log.push(`  (⚠ 저장된 특기 레벨이 없어 임시 레벨 ${SPECIALTY_FALLBACK_LEVEL} 사용)`);
-    
-        }
-    
+
         log.push(
             result.success
                 ? `  → 특기 성공 (효과는 별도 규칙에 따라 GM이 적용)`
                 : `  → 특기 실패`
         );
-    
+
     }
 
     // ============================================
     // 좀비 행동 처리 (좀비 페이즈)
     // ============================================
 
-    function resolveZombieAttack(battle, zombie, log, summary) {
+// ★ 추가: 피격 시 피해 적용 + 감염 판정 (공통 로직 분리)
+function applyZombieHit(battle, target, attackResult, log, summary) {
 
-        const aliveCharacters = battle.characters.filter(c => c.status === "alive");
+    const damage = DAMAGE_TABLE[attackResult.rank] ?? 0;
 
-        if (aliveCharacters.length === 0) {
+    target.hp = Math.max(0, target.hp - damage);
 
-            const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+    log.push(`  → ${target.name} 피해 ${damage} (남은 HP ${target.hp}/${target.maxHp})`);
 
-            log.push(`- ${zombieDisplayName}: 공격 가능한 대상 없음`);
+    let infected = false;
 
-            return;
+    if (INFECTION_CAPABLE_RANKS.includes(attackResult.rank)) {
 
+        if (attackResult.rank === "대성공") {
+            infected = true;
+            log.push(`  → 대성공! 행운 판정 없이 감염 확정`);
         }
 
-        const target = DiceEngine.randomChoice(aliveCharacters);
+        else {
+            const luckCheck = rollStat(target, "luck");
+            log.push(`  → 감염 위험, 행운 판정 ${formatRoll(luckCheck)}`);
 
-        const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
-
-        log.push(`- ${zombieDisplayName} → ${target.name}을(를) 지목!`);
-
-        const zombieStatObj = getZombieStatObject(zombie);
-
-        const attackResult = rollStat(zombieStatObj, "strength");
-
-        log.push(`  공격 판정 ${formatRoll(attackResult)}`);
-
-        if (summary) {
-
-            summary.zombieAttacks.push(`${zombieDisplayName} 공격 판정 ${formatRoll(attackResult)}`);
-
-        }
-
-        if (!attackResult.success) {
-
-            log.push(`  → 빗나감`);
-
-            return;
-
-        }
-
-        // ★ 추가: 회피 보조를 받은 캐릭터는 판정 없이 자동 회피 성공
-            if (assistedIds && assistedIds.has(target.id)) {
-        
-                log.push(`  → ${target.name}은(는) 동료의 회피 보조를 받아 자동 회피 성공! 피해 없음`);
-        
-                if (summary) {
-        
-                    summary.evades.push(`${target.name} 회피 자동 성공 (동료 보조)`);
-        
-                }
-        
-                return;
-        
+            if (summary) {
+                summary.lucks.push(`${target.name} 행운 판정 ${formatRoll(luckCheck)}`);
             }
-        
-            const evadeResult = rollStat(target, "agility");
-
-        
-
-        const evadeResult = rollStat(target, "agility");
-
-        log.push(`  → ${target.name} 회피 판정 ${formatRoll(evadeResult)}`);
-
-        if (summary) {
-
-            summary.evades.push(`${target.name} 회피(민첩) 판정 ${formatRoll(evadeResult)}`);
-
-        }
-
-        const winner = resolveContest(
-            attackResult,
-            zombieStatObj.stats.strength,
-            evadeResult,
-            target.stats.agility
-        );
-
-        if (evadeResult.rank === "대실패") {
-
-            target.hp = Math.max(0, target.hp - 1);
-
-            log.push(`  → 회피 대실패! 추가 페널티로 HP -1 (남은 HP ${target.hp}/${target.maxHp})`);
-
-        }
-
-        if (winner === "defender") {
-
-            log.push(
-                evadeResult.success
-                    ? `  → 회피 성공! 피해 없음`
-                    : `  → 회피 실패했으나 대항 판정 승리, 피해 없음`
-            );
-
-            if (target.hp <= 0 && target.status === "alive") {
-
-                target.status = "down";
-
-                log.push(`  → ${target.name} 전투불능!`);
-
-            }
-
-            return;
-
-        }
-
-        log.push(
-            evadeResult.success
-                ? `  → 회피에 성공했으나 성공 등급이 낮아 대항 판정 패배`
-                : `  → 회피 실패`
-        );
-
-        const damage = DAMAGE_TABLE[attackResult.rank] ?? 0;
-
-        target.hp = Math.max(0, target.hp - damage);
-
-        log.push(`  → ${target.name} 피해 ${damage} (남은 HP ${target.hp}/${target.maxHp})`);
-
-        let infected = false;
-
-        if (INFECTION_CAPABLE_RANKS.includes(attackResult.rank)) {
-
-            if (attackResult.rank === "대성공") {
-
-                infected = true;
-
-                log.push(`  → 대성공! 행운 판정 없이 감염 확정`);
-
-            }
-
-            else {
-
-                const luckCheck = rollStat(target, "luck");
-
-                log.push(`  → 감염 위험, 행운 판정 ${formatRoll(luckCheck)}`);
-
-                if (summary) {
-
-                    summary.lucks.push(`${target.name} 행운 판정 ${formatRoll(luckCheck)}`);
-
-                }
-
-                infected = !luckCheck.success;
-
-                log.push(infected ? `  → 행운 판정 실패, 감염됨` : `  → 행운 판정 성공, 감염 저항`);
-
-            }
-
-        }
-
-        if (infected) {
-
-            const part = pickRandomBodyPart();
-
-            target.infections.push({ part, round: battle.round });
-
-            log.push(`  → 감염 부위: ${part}`);
-
-        }
-
-        if (target.hp <= 0 && target.status === "alive") {
-
-            target.status = "down";
-
-            log.push(`  → ${target.name} 전투불능!`);
-
+            
+            infected = !luckCheck.success;
+            log.push(infected ? `  → 행운 판정 실패, 감염됨` : `  → 행운 판정 성공, 감염 저항`);
         }
 
     }
+
+    if (infected) {
+        const part = pickRandomBodyPart();
+        target.infections.push({ part, round: battle.round });
+        log.push(`  → 감염 부위: ${part}`);
+    }
+
+    if (target.hp <= 0 && target.status === "alive") {
+        target.status = "down";
+        log.push(`  → ${target.name} 전투불능!`);
+    }
+
+}
+
+    
+function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistingIds) {
+
+    const aliveCharacters = battle.characters.filter(c => c.status === "alive");
+
+    if (aliveCharacters.length === 0) {
+
+        const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+
+        log.push(`- ${zombieDisplayName}: 공격 가능한 대상 없음`);
+
+        return;
+
+    }
+    const target = DiceEngine.randomChoice(aliveCharacters);
+    const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+    log.push(`- ${zombieDisplayName} → ${target.name}을(를) 지목!`);
+    const zombieStatObj = getZombieStatObject(zombie);
+    const attackResult = rollStat(zombieStatObj, "strength");
+    log.push(`  공격 판정 ${formatRoll(attackResult)}`);
+
+    if (summary) {
+        summary.zombieAttacks.push(`${zombieDisplayName} 공격 판정 ${formatRoll(attackResult)}`);
+    }
+
+    if (!attackResult.success) {
+        log.push(`  → 빗나감`);
+        return;
+    }
+
+    // 회피 보조를 "받는" 캐릭터: 판정 없이 자동 회피 성공
+    if (assistedIds && assistedIds.has(target.id)) {
+        log.push(`  → ${target.name}은(는) 동료의 회피 보조를 받아 자동 회피 성공! 피해 없음`);
+        if (summary) {
+            summary.evades.push(`${target.name} 회피 자동 성공 (동료 보조)`);
+        }
+        return;
+    }
+
+    // ★ 추가: 회피 보조를 "주는" 캐릭터가 지목당한 경우 → 판정 없이 자동 회피 실패
+    if (assistingIds && assistingIds.has(target.id)) {
+        log.push(`  → ${target.name}은(는) 동료를 보조하느라 자신을 방어하지 못해 자동으로 피격!`);
+        if (summary) {
+            summary.evades.push(`${target.name} 회피 자동 실패 (동료 보조 중)`);
+        }
+        applyZombieHit(battle, target, attackResult, log, summary);
+        return;
+    }
+
+    const evadeResult = rollStat(target, "agility");
+
+    log.push(`  → ${target.name} 회피 판정 ${formatRoll(evadeResult)}`);
+
+    if (summary) {
+        summary.evades.push(`${target.name} 회피(민첩) 판정 ${formatRoll(evadeResult)}`);
+    }
+
+    const winner = resolveContest(
+        attackResult,
+        zombieStatObj.stats.strength,
+        evadeResult,
+        target.stats.agility
+    );
+
+    if (evadeResult.rank === "대실패") {
+        target.hp = Math.max(0, target.hp - 1);
+        log.push(`  → 회피 대실패! 추가 페널티로 HP -1 (남은 HP ${target.hp}/${target.maxHp})`);
+    }
+
+    if (winner === "defender") {
+        log.push(
+            evadeResult.success
+                ? `  → 회피 성공! 피해 없음`
+                : `  → 회피 실패했으나 대항 판정 승리, 피해 없음`
+        );
+
+        if (target.hp <= 0 && target.status === "alive") {
+            target.status = "down";
+            log.push(`  → ${target.name} 전투불능!`);
+        }
+        return;
+    }
+
+    log.push(
+        evadeResult.success
+            ? `  → 회피에 성공했으나 성공 등급이 낮아 대항 판정 패배`
+            : `  → 회피 실패`
+    );
+
+    applyZombieHit(battle, target, attackResult, log, summary);
+
+}
 
     // ============================================
     // 라운드 진행
     // ============================================
 
-    function resolveRound(battleId, actions, skipRunnerPhase) {
+function resolveRound(battleId, actions, skipRunnerPhase) {
 
-        const battle = getBattle(battleId);
+    const battle = getBattle(battleId);
 
-        if (!battle || battle.status !== "ongoing") return battle;
+    if (!battle || battle.status !== "ongoing") return battle;
 
-        const log = [];
+    const log = [];
 
-        const roundSummary = {
-            attacks: [],
-            flees: [],
-            assists: [],        // ★ 추가
-            zombieAttacks: [],
-            evades: [],
-            lucks: []
-        };
+    const roundSummary = {
+        attacks: [],
+        flees: [],
+        assists: [],
+        zombieAttacks: [],
+        evades: [],
+        lucks: []
+    };
 
-        const assistedCharacterIds = new Set();  // ★ 추가
+    const assistedCharacterIds = new Set();   // 보조를 "받는" 쪽
+    const assistingCharacterIds = new Set();  // ★ 추가: 보조를 "주는" 쪽
 
-        log.push(`===== ${battle.round} 라운드 =====`);
+    log.push(`===== ${battle.round} 라운드 =====`);
 
-        if (!skipRunnerPhase) {
+    if (!skipRunnerPhase) {
 
-            log.push(`[러너 페이즈]`);
+        log.push(`[러너 페이즈]`);
 
-            battle.characters.forEach(character => {
+        battle.characters.forEach(character => {
 
-                if (character.status !== "alive") return;
+            if (character.status !== "alive") return;
 
-                const action = actions[character.id];
+            const action = actions[character.id];
 
-                if (!action || action.type === "none") {
+            if (!action || action.type === "none") {
 
-                    log.push(`- ${character.name}: 행동 없음`);
+                log.push(`- ${character.name}: 행동 없음`);
 
-                    return;
+                return;
 
-                }
+            }
 
-                if (action.type === "attack") {
+            if (action.type === "attack") {
 
-                    resolveAttack(battle, character, action.targetZombieId, log, roundSummary);
+                resolveAttack(battle, character, action.targetZombieId, log, roundSummary);
 
-                }
+            }
 
-                else if (action.type === "evade") {
-                    resolveEvade(character, log, roundSummary);
-                }
+            else if (action.type === "evade") {
+                resolveEvade(character, log, roundSummary);
+            }
 
-                else if (action.type === "specialty") {
-                    resolveSpecialty(character, log);
-                }
+            else if (action.type === "specialty") {
+                resolveSpecialty(character, log);
+            }
 
-                // ★ 추가: 회피 보조
+        // 회피 보조
                 else if (action.type === "assistEvade") {
     
                     const targetCharacter = battle.characters.find(
@@ -786,90 +749,98 @@ function setCharacterHp(battleId, characterId, newHp) {
                         return;
                     }
     
-                    assistedCharacterIds.add(targetCharacter.id);
-                    resolveAssistEvade(character, targetCharacter, log, roundSummary);
+                    // 보조를 "주는" 쪽은 판정 성공/실패와 무관하게 자기 방어에 소홀해짐
+                    assistingCharacterIds.add(character.id);
+    
+                    const assistSuccess = resolveAssistEvade(character, targetCharacter, log, roundSummary);
+    
+                    // ★ 변경: 판정에 성공했을 때만 대상을 보호 목록에 추가.
+                    // Set이므로 이미 다른 동료의 보조로 추가돼 있다면 유지되고,
+                    // 이번 보조가 실패해도 기존 성공 기록이 지워지지 않음
+                    // → "여러 명이 보조 시 한 명이라도 성공하면 보호 성립" 조건 자동 충족
+                    if (assistSuccess) {
+                        assistedCharacterIds.add(targetCharacter.id);
+                    }
                 }
-            });
-        }
-
-        else {
-
-            log.push(`[러너 페이즈 생략 - 좀비 선공]`);
-
-        }
-
-        log.push(`[좀비 페이즈]`);
-
-        battle.zombies.forEach(zombie => {
-
-            if (!zombie.alive) return;
-
-            resolveZombieAttack(battle, zombie, log, roundSummary);
-
         });
+    }
 
-        log.push(`----- ${battle.round}라운드 판정 요약 -----`);
+    else {
 
-        if (roundSummary.attacks.length > 0) {
-            log.push(`러너 페이즈`);
-            roundSummary.attacks.forEach(entry => log.push(entry));
-        }
-
-        if (roundSummary.flees.length > 0) {
-            log.push(`캐릭터 도주`);
-            roundSummary.flees.forEach(entry => log.push(entry));
-        }
-
-        // ★ 추가
-        if (roundSummary.assists.length > 0) {
-            log.push(`회피 보조`);
-            roundSummary.assists.forEach(entry => log.push(entry));
-        }
-
-
-        if (roundSummary.zombieAttacks.length > 0) {
-            log.push(`좀비 페이즈`);
-            roundSummary.zombieAttacks.forEach(entry => log.push(entry));
-        }
-
-        if (roundSummary.evades.length > 0) {
-            log.push(`캐릭터 회피`);
-            roundSummary.evades.forEach(entry => log.push(entry));
-        }
-
-        if (roundSummary.lucks.length > 0) {
-            log.push(`캐릭터 행운`);
-            roundSummary.lucks.forEach(entry => log.push(entry));
-        }
-
-        battle.log.push(...log);
-        const allZombiesDead = battle.zombies.every(z => !z.alive);
-        const allCharactersOut = battle.characters.every(c => c.status !== "alive");
-
-        if (allZombiesDead) {
-            battle.status = "victory";
-            battle.log.push(`===== 전투 종료: 좀비 전멸, 승리! =====`);
-        }
-
-        else if (allCharactersOut) {
-
-            battle.status = "defeat";
-
-            battle.log.push(`===== 전투 종료: 모든 캐릭터 전투불능/도주 =====`);
-
-        }
-
-        else {
-
-            battle.round += 1;
-
-        }
-
-        saveBattles();
-
-        return battle;
+        log.push(`[러너 페이즈 생략 - 좀비 선공]`);
 
     }
+
+    log.push(`[좀비 페이즈]`);
+
+    battle.zombies.forEach(zombie => {
+
+        if (!zombie.alive) return;
+
+        resolveZombieAttack(battle, zombie, log, roundSummary, assistedCharacterIds, assistingCharacterIds);
+
+    });
+
+    log.push(`----- ${battle.round}라운드 판정 요약 -----`);
+
+    if (roundSummary.attacks.length > 0) {
+        log.push(`러너 페이즈`);
+        roundSummary.attacks.forEach(entry => log.push(entry));
+    }
+
+    if (roundSummary.flees.length > 0) {
+        log.push(`캐릭터 도주`);
+        roundSummary.flees.forEach(entry => log.push(entry));
+    }
+
+    if (roundSummary.assists.length > 0) {
+        log.push(`회피 보조`);
+        roundSummary.assists.forEach(entry => log.push(entry));
+    }
+
+    if (roundSummary.zombieAttacks.length > 0) {
+        log.push(`좀비 페이즈`);
+        roundSummary.zombieAttacks.forEach(entry => log.push(entry));
+    }
+
+    if (roundSummary.evades.length > 0) {
+        log.push(`캐릭터 회피`);
+        roundSummary.evades.forEach(entry => log.push(entry));
+    }
+
+    if (roundSummary.lucks.length > 0) {
+        log.push(`캐릭터 행운`);
+        roundSummary.lucks.forEach(entry => log.push(entry));
+    }
+
+    battle.log.push(...log);
+    const allZombiesDead = battle.zombies.every(z => !z.alive);
+    const allCharactersOut = battle.characters.every(c => c.status !== "alive");
+
+    if (allZombiesDead) {
+        battle.status = "victory";
+        battle.log.push(`===== 전투 종료: 좀비 전멸, 승리! =====`);
+    }
+
+    else if (allCharactersOut) {
+
+        battle.status = "defeat";
+
+        battle.log.push(`===== 전투 종료: 모든 캐릭터 전투불능/도주 =====`);
+
+    }
+
+    else {
+
+        battle.round += 1;
+
+    }
+
+    saveBattles();
+
+    return battle;
+
+}
 
     // ============================================
     // 반환
@@ -1278,29 +1249,48 @@ function renderRoundControls(battle) {
             })
             .join("");
 
+        // ★ 추가: 회피 보조 대상 후보 (자기 자신 제외, 생존 캐릭터만)
+        const allyOptions = aliveCharacters
+            .filter(c => c.id !== character.id)
+            .map(c => `<option value="${c.id}">${c.name}</option>`)
+            .join("");
+
         row.innerHTML = `
             <b>${character.name}</b>
             <select class="actionType">
                 <option value="attack">공격(근력)</option>
                 <option value="evade">회피/도주(민첩)</option>
                 <option value="specialty">특기</option>
+                <option value="assistEvade">회피 보조</option>
                 <option value="none">행동 안 함</option>
             </select>
             <select class="actionTargetZombie">
                 ${zombieOptions}
             </select>
+            <select class="actionTargetCharacter" style="display:none;">
+                ${allyOptions || `<option value="">보조 가능한 대상 없음</option>`}
+            </select>
         `;
 
         const actionTypeSelect = row.querySelector(".actionType");
 
-        const targetSelect = row.querySelector(".actionTargetZombie");
+        const targetZombieSelect = row.querySelector(".actionTargetZombie");
 
-        actionTypeSelect.addEventListener("change", () => {
+        const targetCharacterSelect = row.querySelector(".actionTargetCharacter");
 
-            targetSelect.style.display =
+        const syncTargetVisibility = () => {
+
+            targetZombieSelect.style.display =
                 actionTypeSelect.value === "attack" ? "" : "none";
 
-        });
+            targetCharacterSelect.style.display =
+                actionTypeSelect.value === "assistEvade" ? "" : "none";
+
+        };
+
+        actionTypeSelect.addEventListener("change", syncTargetVisibility);
+
+        syncTargetVisibility(); // 초기 상태 반영
 
         wrap.appendChild(row);
 
@@ -1320,11 +1310,20 @@ function renderRoundControls(battle) {
 
             const type = row.querySelector(".actionType").value;
 
-            // 전환된 좀비는 id가 문자열("T-...")이라 Number()로 변환하면 NaN이 되어
-            // 대상을 못 찾는 버그가 있었음 → 원본 문자열 값을 그대로 사용
             const targetZombieId = row.querySelector(".actionTargetZombie").value;
 
-            actions[characterId] = { type, targetZombieId };
+            // ★ 추가: 회피 보조 대상 캐릭터 id
+            const targetCharacterId = row.querySelector(".actionTargetCharacter").value;
+
+            if (type === "assistEvade" && !targetCharacterId) {
+
+                actions[characterId] = { type: "none" };
+
+                return;
+
+            }
+
+            actions[characterId] = { type, targetZombieId, targetCharacterId };
 
         });
 
