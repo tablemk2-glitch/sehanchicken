@@ -393,32 +393,67 @@ const BattleManager = (() => {
 
     }
 
-    function resolveEvade(character, log, summary) {
-        const result = rollStat(character, "agility");
-        log.push(`- ${character.name} 회피/도주(민첩) 판정 ${formatRoll(result)}`);
+// 변경 후
+function resolveFlee(character, log, summary) {
 
-        if (summary) {
-            summary.flees.push(`${character.name} 도주(민첩) 판정 ${formatRoll(result)}`);
-        }
+    const result = rollStat(character, "agility");
 
-        if (result.success) {
-            character.status = "fled";
-            log.push(`  → 도주 성공, 전투 이탈`);
-            return;
-        }
+    log.push(`- ${character.name} 도주(민첩) 판정 ${formatRoll(result)}`);
 
-        log.push(`  → 도주 실패, 전투 지속`);
+    if (summary) {
+        summary.flees.push(`${character.name} 도주(민첩) 판정 ${formatRoll(result)}`);
+    }
 
-        if (result.rank === "대실패") {
-            character.hp = Math.max(0, character.hp - 1);
-            log.push(`  → 회피 대실패! 추가 페널티로 HP -1 (남은 HP ${character.hp}/${character.maxHp})`);
+    if (result.success) {
+        character.status = "fled";
+        log.push(`  → 도주 성공, 전투 이탈`);
+        return;
+    }
 
-            if (character.hp <= 0 && character.status === "alive") {
-                character.status = "down";
-                log.push(`  → ${character.name} 전투불능!`);
-            }
+    log.push(`  → 도주 실패, 전투 지속`);
+
+    if (result.rank === "대실패") {
+        character.hp = Math.max(0, character.hp - 1);
+        log.push(`  → 도주 대실패! 추가 페널티로 HP -1 (남은 HP ${character.hp}/${character.maxHp})`);
+
+        if (character.hp <= 0 && character.status === "alive") {
+            character.status = "down";
+            log.push(`  → ${character.name} 전투불능!`);
         }
     }
+
+}
+
+// ★ 신규: 회피는 전투 이탈 없이 이번 라운드 공격만 회피
+function resolveDodge(character, log, summary, guaranteedEvadeIds) {
+
+    const result = rollStat(character, "agility");
+
+    log.push(`- ${character.name} 회피(민첩) 판정 ${formatRoll(result)}`);
+
+    if (summary) {
+        summary.dodges.push(`${character.name} 회피(민첩) 판정 ${formatRoll(result)}`);
+    }
+
+    if (result.success) {
+        guaranteedEvadeIds.add(character.id);
+        log.push(`  → 회피 성공, 이번 라운드 공격 자동 회피`);
+        return;
+    }
+
+    log.push(`  → 회피 실패, 전투 지속`);
+
+    if (result.rank === "대실패") {
+        character.hp = Math.max(0, character.hp - 1);
+        log.push(`  → 회피 대실패! 추가 페널티로 HP -1 (남은 HP ${character.hp}/${character.maxHp})`);
+
+        if (character.hp <= 0 && character.status === "alive") {
+            character.status = "down";
+            log.push(`  → ${character.name} 전투불능!`);
+        }
+    }
+
+}
 
 function resolveAssistEvade(character, targetCharacter, log, summary) {
 
@@ -771,12 +806,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             const log = [];
         
             const summary = {
-                attacks: [],
-                flees: [],
-                assists: [],
-                zombieAttacks: [],
-                evades: [],
-                lucks: []
+                attacks: [], flees: [], dodges: [], assists: [], zombieAttacks: [], evades: [], lucks: []
             };
         
             const assistedCharacterIds = new Set();
@@ -805,8 +835,12 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         
                     }
         
-                    else if (action.type === "evade") {
-                        resolveEvade(character, log, summary);
+                    else if (action.type === "flee") {
+                        resolveFlee(character, log, summary);
+                    }
+                    
+                    else if (action.type === "dodge") {
+                        resolveDodge(character, log, summary, assistedCharacterIds);
                     }
         
                     else if (action.type === "specialty") {
@@ -884,7 +918,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         const log = [];
     
         const summary = battle.pendingSummary || {
-            attacks: [], flees: [], assists: [], zombieAttacks: [], evades: [], lucks: []
+            attacks: [], flees: [], dodges: [], assists: [], zombieAttacks: [], evades: [], lucks: []
         };
     
         const assistedCharacterIds = new Set(battle.pendingAssistedIds || []);
@@ -907,8 +941,12 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
                 resolveAttack(battle, character, action.targetZombieId, log, summary);
             }
     
-            else if (action.type === "evade") {
-                resolveEvade(character, log, summary);
+            else if (action.type === "flee") {
+                resolveFlee(character, log, summary);
+            }
+            
+            else if (action.type === "dodge") {
+                resolveDodge(character, log, summary, assistedCharacterIds);
             }
     
             else if (action.type === "specialty") {
@@ -951,8 +989,6 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         return battle;
     
     }
-
-
             
         // ============================================
         // 2단계: 좀비 페이즈 해결 + 라운드 종료
@@ -969,7 +1005,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             const log = [];
         
             const summary = battle.pendingSummary || {
-                attacks: [], flees: [], assists: [], zombieAttacks: [], evades: [], lucks: []
+                attacks: [], flees: [], dodges: [], assists: [], zombieAttacks: [], evades: [], lucks: []
             };
         
             const assistedIds = new Set(battle.pendingAssistedIds || []);
@@ -999,7 +1035,12 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
                 log.push(`캐릭터 도주`);
                 summary.flees.forEach(entry => log.push(entry));
             }
-        
+
+            if (summary.dodges.length > 0) {
+                log.push(`캐릭터 회피 시도`);
+                summary.dodges.forEach(entry => log.push(entry));
+            }
+            
             if (summary.assists.length > 0) {
                 log.push(`회피 보조`);
                 summary.assists.forEach(entry => log.push(entry));
@@ -1634,7 +1675,8 @@ function createActionRow(character, aliveZombies, aliveCharacters) {
         <b>${character.name}</b>
         <select class="actionType">
             <option value="attack">공격(근력)</option>
-            <option value="evade">회피/도주(민첩)</option>
+            <option value="dodge">회피(민첩)</option>
+            <option value="flee">도주(민첩)</option>
             <option value="specialty">특기</option>
             <option value="assistEvade">회피 보조</option>
             <option value="none">행동 안 함</option>
