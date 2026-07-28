@@ -391,46 +391,39 @@ const BattleManager = (() => {
     }
 
     function resolveEvade(character, log, summary) {
-
         const result = rollStat(character, "agility");
-
         log.push(`- ${character.name} 회피/도주(민첩) 판정 ${formatRoll(result)}`);
 
         if (summary) {
-
             summary.flees.push(`${character.name} 도주(민첩) 판정 ${formatRoll(result)}`);
-
         }
 
         if (result.success) {
-
             character.status = "fled";
-
             log.push(`  → 도주 성공, 전투 이탈`);
-
             return;
-
         }
 
         log.push(`  → 도주 실패, 전투 지속`);
 
         if (result.rank === "대실패") {
-
             character.hp = Math.max(0, character.hp - 1);
-
             log.push(`  → 회피 대실패! 추가 페널티로 HP -1 (남은 HP ${character.hp}/${character.maxHp})`);
 
             if (character.hp <= 0 && character.status === "alive") {
-
                 character.status = "down";
-
                 log.push(`  → ${character.name} 전투불능!`);
-
             }
-
         }
-
     }
+
+ function resolveAssistEvade(character, targetCharacter, log, summary) {
+  
+        log.push(`- ${character.name}: ${targetCharacter.name}의 회피를 보조 (이번 라운드 자동 회피 성공 처리)`);
+    if (summary) {
+        summary.assists.push(`${character.name} → ${targetCharacter.name} 회피 보조`);
+    }
+}
 
     // ============================================
     // 캐릭터 → 좀비 진영 수동 전환 (진행자용)
@@ -439,46 +432,73 @@ const BattleManager = (() => {
     function convertCharacterToZombieEnemy(battleId, characterId) {
 
         const battle = getBattle(battleId);
-
         if (!battle) return null;
-
         const idx = battle.characters.findIndex(c => c.id === characterId);
-
         if (idx === -1) return null;
-
         const character = battle.characters[idx];
 
         const turnedZombie = {
-
             id: `T-${character.id}`,
-
             name: character.name, // 이름 그대로 유지 ("(전환됨)" 접미사 제거)
-
             hits: 0,
-
             requiredHits: ZOMBIE_REQUIRED_HITS,
-
             alive: true,
-
             isTurnedCharacter: true,
-
             sourceCharacterId: character.id,
-
             stats: { ...character.stats }
-
         };
 
         battle.zombies.push(turnedZombie);
-
         battle.characters.splice(idx, 1);
-
         battle.log.push(`⚠ ${character.name}이(가) 좀비로 전환되었습니다.`);
 
         saveBattles();
-
         return battle;
-
     }
+
+
+    function setZombieHits(battleId, zombieId, newHits) {
+            const battle = getBattle(battleId);
+            if (!battle) return null;
+            const zombie = battle.zombies.find(z => String(z.id) === String(zombieId));
+            if (!zombie) return null;
+        
+            const clamped = Math.max(0, Math.min(Number(newHits) || 0, zombie.requiredHits));
+            const old = zombie.hits;
+        
+            zombie.hits = clamped;
+            zombie.alive = zombie.hits < zombie.requiredHits;
+        
+            const displayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+        
+            battle.log.push(`⚙ [수동 조정] ${displayName} 누적 피해 ${old} → ${zombie.hits}${zombie.alive ? "" : " (전투불능 처리)"}`);
+            saveBattles();
+            return battle;
+    }
+
+function setCharacterHp(battleId, characterId, newHp) {
+
+    const battle = getBattle(battleId);
+    if (!battle) return null;
+    const character = battle.characters.find(c => c.id === characterId);
+    if (!character) return null;
+    const clamped = Math.max(0, Math.min(Number(newHp) || 0, character.maxHp));
+    const old = character.hp;
+
+    character.hp = clamped;
+
+    if (character.hp <= 0 && character.status === "alive") {
+        character.status = "down";
+    }
+
+    else if (character.hp > 0 && character.status === "down") {
+        character.status = "alive"; // GM 수동 소생/회복 처리
+    }
+
+    battle.log.push(`⚙ [수동 조정] ${character.name} HP ${old} → ${character.hp}${character.status === "down" ? " (전투불능 처리)" : ""}`);
+    saveBattles();
+    return battle;
+}
 
 
     function resolveSpecialty(character, log) {
@@ -566,6 +586,25 @@ const BattleManager = (() => {
             return;
 
         }
+
+        // ★ 추가: 회피 보조를 받은 캐릭터는 판정 없이 자동 회피 성공
+            if (assistedIds && assistedIds.has(target.id)) {
+        
+                log.push(`  → ${target.name}은(는) 동료의 회피 보조를 받아 자동 회피 성공! 피해 없음`);
+        
+                if (summary) {
+        
+                    summary.evades.push(`${target.name} 회피 자동 성공 (동료 보조)`);
+        
+                }
+        
+                return;
+        
+            }
+        
+            const evadeResult = rollStat(target, "agility");
+
+        
 
         const evadeResult = rollStat(target, "agility");
 
@@ -691,10 +730,13 @@ const BattleManager = (() => {
         const roundSummary = {
             attacks: [],
             flees: [],
+            assists: [],        // ★ 추가
             zombieAttacks: [],
             evades: [],
             lucks: []
         };
+
+        const assistedCharacterIds = new Set();  // ★ 추가
 
         log.push(`===== ${battle.round} 라운드 =====`);
 
@@ -723,19 +765,31 @@ const BattleManager = (() => {
                 }
 
                 else if (action.type === "evade") {
-
                     resolveEvade(character, log, roundSummary);
-
                 }
 
                 else if (action.type === "specialty") {
-
                     resolveSpecialty(character, log);
-
                 }
 
+                // ★ 추가: 회피 보조
+                else if (action.type === "assistEvade") {
+    
+                    const targetCharacter = battle.characters.find(
+                        c => String(c.id) === String(action.targetCharacterId)
+                            && c.status === "alive"
+                            && c.id !== character.id
+                    );
+    
+                    if (!targetCharacter) {
+                        log.push(`- ${character.name}: 회피 보조 대상이 유효하지 않아 취소`);
+                        return;
+                    }
+    
+                    assistedCharacterIds.add(targetCharacter.id);
+                    resolveAssistEvade(character, targetCharacter, log, roundSummary);
+                }
             });
-
         }
 
         else {
@@ -757,57 +811,44 @@ const BattleManager = (() => {
         log.push(`----- ${battle.round}라운드 판정 요약 -----`);
 
         if (roundSummary.attacks.length > 0) {
-
             log.push(`러너 페이즈`);
-
             roundSummary.attacks.forEach(entry => log.push(entry));
-
         }
 
         if (roundSummary.flees.length > 0) {
-
             log.push(`캐릭터 도주`);
-
             roundSummary.flees.forEach(entry => log.push(entry));
-
         }
 
+        // ★ 추가
+        if (roundSummary.assists.length > 0) {
+            log.push(`회피 보조`);
+            roundSummary.assists.forEach(entry => log.push(entry));
+        }
+
+
         if (roundSummary.zombieAttacks.length > 0) {
-
             log.push(`좀비 페이즈`);
-
             roundSummary.zombieAttacks.forEach(entry => log.push(entry));
-
         }
 
         if (roundSummary.evades.length > 0) {
-
             log.push(`캐릭터 회피`);
-
             roundSummary.evades.forEach(entry => log.push(entry));
-
         }
 
         if (roundSummary.lucks.length > 0) {
-
             log.push(`캐릭터 행운`);
-
             roundSummary.lucks.forEach(entry => log.push(entry));
-
         }
 
         battle.log.push(...log);
-
         const allZombiesDead = battle.zombies.every(z => !z.alive);
-
         const allCharactersOut = battle.characters.every(c => c.status !== "alive");
 
         if (allZombiesDead) {
-
             battle.status = "victory";
-
             battle.log.push(`===== 전투 종료: 좀비 전멸, 승리! =====`);
-
         }
 
         else if (allCharactersOut) {
@@ -835,33 +876,21 @@ const BattleManager = (() => {
     // ============================================
 
 return {
-
         loadBattles,
-
         saveBattles,
-
         createBattle,
-
         deleteBattle,
-
         getBattle,
-
         get battles() { return battles; },
-
         resolveRound,
-
         rollStat,
-
         pickRandomBodyPart,
-
         convertCharacterToZombieEnemy,
-
+        setZombieHits,      // ★ 추가
+        setCharacterHp,      // ★ 추가
         BODY_PARTS,
-
         ZOMBIE_STAT_LEVEL,
-
         CHARACTER_MAX_HP
-
     };
 
 })();
