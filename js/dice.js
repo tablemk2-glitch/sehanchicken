@@ -32,7 +32,8 @@ function buildCharacterPreview(character) {
         `행운 ${stats.luck}`
     ];
     if (character.specialty) {
-        parts.push(`특기 ${character.specialty}`);
+        const valueText = character.specialtyValue != null ? ` ${character.specialtyValue}` : "";
+        parts.push(`특기 ${character.specialty}${valueText}`);
     }
     return parts.join(" · ");
 }
