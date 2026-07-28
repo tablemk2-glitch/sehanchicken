@@ -868,7 +868,92 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             return battle;
         
         }
-        
+
+    // ============================================
+    // 1.5단계: 좀비 지목 공개 후 반응 행동 처리
+    // ============================================
+    
+    function resolveReactionPhase(battleId, actions) {
+    
+        const battle = getBattle(battleId);
+    
+        if (!battle || battle.status !== "ongoing") return battle;
+    
+        if (battle.phase !== "targeted") return battle; // 좀비 지목이 아직 안 끝남
+    
+        const log = [];
+    
+        const summary = battle.pendingSummary || {
+            attacks: [], flees: [], assists: [], zombieAttacks: [], evades: [], lucks: []
+        };
+    
+        const assistedCharacterIds = new Set(battle.pendingAssistedIds || []);
+        const assistingCharacterIds = new Set(battle.pendingAssistingIds || []);
+    
+        log.push(`[반응 페이즈 - 좀비 지목 공개 후 행동]`);
+    
+        battle.characters.forEach(character => {
+    
+            if (character.status !== "alive") return;
+    
+            const action = actions[character.id];
+    
+            if (!action || action.type === "none") {
+                log.push(`- ${character.name}: 반응 행동 없음`);
+                return;
+            }
+    
+            if (action.type === "attack") {
+                resolveAttack(battle, character, action.targetZombieId, log, summary);
+            }
+    
+            else if (action.type === "evade") {
+                resolveEvade(character, log, summary);
+            }
+    
+            else if (action.type === "specialty") {
+                resolveSpecialty(character, log);
+            }
+    
+            else if (action.type === "assistEvade") {
+    
+                const targetCharacter = battle.characters.find(
+                    c => String(c.id) === String(action.targetCharacterId)
+                        && c.status === "alive"
+                        && c.id !== character.id
+                );
+    
+                if (!targetCharacter) {
+                    log.push(`- ${character.name}: 회피 보조 대상이 유효하지 않아 취소`);
+                    return;
+                }
+    
+                assistingCharacterIds.add(character.id);
+    
+                const assistSuccess = resolveAssistEvade(character, targetCharacter, log, summary);
+    
+                if (assistSuccess) {
+                    assistedCharacterIds.add(targetCharacter.id);
+                }
+            }
+    
+        });
+    
+        battle.log.push(...log);
+    
+        battle.phase = "reacted";
+        battle.pendingAssistedIds = Array.from(assistedCharacterIds);
+        battle.pendingAssistingIds = Array.from(assistingCharacterIds);
+        battle.pendingSummary = summary;
+    
+        saveBattles();
+    
+        return battle;
+    
+    }
+
+
+            
         // ============================================
         // 2단계: 좀비 페이즈 해결 + 라운드 종료
         // ============================================
@@ -879,7 +964,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         
             if (!battle || battle.status !== "ongoing") return battle;
         
-            if (battle.phase !== "targeted") return battle; // 1단계가 아직 안 끝남
+            if (battle.phase !== "reacted") return battle; // 반응 페이즈가 아직 안 끝남
         
             const log = [];
         
@@ -979,6 +1064,7 @@ return {
         getBattle,
         get battles() { return battles; },
         resolveRunnerAndTargetPhase, // ★ 변경
+        resolveReactionPhase,       // ★ 추가
         resolveZombiePhase,          // ★ 변경
         rollStat,
         pickRandomBodyPart,
@@ -1522,120 +1608,179 @@ const charListEl = card.querySelector(".character-list");
 // 라운드 행동 선택 UI
 // ----------------------------------------
 
+//헬퍼 
+function getZombieDisplayName(zombie) {
+    return zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+}
+
+function createActionRow(character, aliveZombies, aliveCharacters) {
+
+    const row = document.createElement("div");
+
+    row.className = "action-row";
+
+    row.dataset.characterId = character.id;
+
+    const zombieOptions = aliveZombies
+        .map(z => `<option value="${z.id}">${getZombieDisplayName(z)}</option>`)
+        .join("");
+
+    const allyOptions = aliveCharacters
+        .filter(c => c.id !== character.id)
+        .map(c => `<option value="${c.id}">${c.name}</option>`)
+        .join("");
+
+    row.innerHTML = `
+        <b>${character.name}</b>
+        <select class="actionType">
+            <option value="attack">공격(근력)</option>
+            <option value="evade">회피/도주(민첩)</option>
+            <option value="specialty">특기</option>
+            <option value="assistEvade">회피 보조</option>
+            <option value="none">행동 안 함</option>
+        </select>
+        <select class="actionTargetZombie">
+            ${zombieOptions}
+        </select>
+        <select class="actionTargetCharacter" style="display:none;">
+            ${allyOptions || `<option value="">보조 가능한 대상 없음</option>`}
+        </select>
+    `;
+
+    const actionTypeSelect = row.querySelector(".actionType");
+    const targetZombieSelect = row.querySelector(".actionTargetZombie");
+    const targetCharacterSelect = row.querySelector(".actionTargetCharacter");
+
+    const syncTargetVisibility = () => {
+        targetZombieSelect.style.display = actionTypeSelect.value === "attack" ? "" : "none";
+        targetCharacterSelect.style.display = actionTypeSelect.value === "assistEvade" ? "" : "none";
+    };
+
+    actionTypeSelect.addEventListener("change", syncTargetVisibility);
+    syncTargetVisibility();
+
+    return row;
+
+}
+
+function collectActionsFromRows(wrap) {
+
+    const actions = {};
+
+    wrap.querySelectorAll(".action-row").forEach(row => {
+
+        const characterId = row.dataset.characterId;
+        const type = row.querySelector(".actionType").value;
+        const targetZombieId = row.querySelector(".actionTargetZombie").value;
+        const targetCharacterId = row.querySelector(".actionTargetCharacter").value;
+
+        if (type === "assistEvade" && !targetCharacterId) {
+            actions[characterId] = { type: "none" };
+            return;
+        }
+
+        actions[characterId] = { type, targetZombieId, targetCharacterId };
+
+    });
+
+    return actions;
+
+} 
+//헬퍼
+
 function renderRoundControls(battle) {
 
     const wrap = document.createElement("div");
 
     wrap.className = "round-controls";
 
-    // ★ 2단계 대기 상태: 좀비 지목까지 끝났고 좀비 페이즈만 남음
-    if (battle.phase === "targeted") {
+    const aliveCharacters = battle.characters.filter(c => c.status === "alive");
+    const aliveZombies = battle.zombies.filter(z => z.alive);
+
+    // ★ 3단계 대기: 반응 행동까지 끝났고 좀비 페이즈만 남음
+    if (battle.phase === "reacted") {
 
         wrap.innerHTML = `
             <h3>이번 라운드 행동</h3>
-            <p>좀비 지목이 완료되었습니다. 좀비 페이즈를 진행하세요.</p>
+            <p>반응 행동까지 모두 처리되었습니다. 좀비 페이즈를 진행하세요.</p>
         `;
 
         const btnResolveZombie = document.createElement("button");
-
         btnResolveZombie.textContent = "좀비 페이즈 진행";
 
         btnResolveZombie.addEventListener("click", () => {
-
             BattleManager.resolveZombiePhase(battle.id);
-
             renderAllBattles();
-
         });
 
         wrap.appendChild(btnResolveZombie);
-
         return wrap;
 
     }
 
-    // ★ 1단계 대기 상태: 행동 입력
+    // ★ 2단계 대기: 좀비 지목 공개 후 반응 행동 선택
+    if (battle.phase === "targeted") {
+
+        wrap.innerHTML = `<h3>좀비 지목 결과</h3>`;
+
+        const targetList = document.createElement("ul");
+
+        (battle.pendingZombieTargets || []).forEach(({ zombieId, targetCharacterId }) => {
+
+            const zombie = battle.zombies.find(z => String(z.id) === String(zombieId));
+            const target = battle.characters.find(c => c.id === targetCharacterId);
+
+            const li = document.createElement("li");
+            li.textContent = zombie
+                ? `${getZombieDisplayName(zombie)} → ${target ? target.name : "대상 없음"}`
+                : "알 수 없는 좀비";
+
+            targetList.appendChild(li);
+
+        });
+
+        wrap.appendChild(targetList);
+
+        const reactionHeading = document.createElement("h3");
+        reactionHeading.textContent = "반응 행동 선택";
+        wrap.appendChild(reactionHeading);
+
+        aliveCharacters.forEach(character => {
+            wrap.appendChild(createActionRow(character, aliveZombies, aliveCharacters));
+        });
+
+        const btnResolveReaction = document.createElement("button");
+        btnResolveReaction.textContent = "반응 행동 확정";
+
+        btnResolveReaction.addEventListener("click", () => {
+            const actions = collectActionsFromRows(wrap);
+            BattleManager.resolveReactionPhase(battle.id, actions);
+            renderAllBattles();
+        });
+
+        wrap.appendChild(btnResolveReaction);
+        return wrap;
+
+    }
+
+    // ★ 1단계 대기: 행동 입력 (기존과 동일, 행동 열 생성만 헬퍼로 교체)
     wrap.innerHTML = `<h3>이번 라운드 행동</h3>`;
 
     const skipRow = document.createElement("label");
-
     skipRow.innerHTML = `
         <input type="checkbox" class="skipRunnerPhase">
         러너 공격 생략 (좀비 선공)
     `;
-
     wrap.appendChild(skipRow);
 
     const skipCheckbox = skipRow.querySelector(".skipRunnerPhase");
 
-    const aliveCharacters = battle.characters.filter(c => c.status === "alive");
-
-    const aliveZombies = battle.zombies.filter(z => z.alive);
-
     aliveCharacters.forEach(character => {
-
-        const row = document.createElement("div");
-
-        row.className = "action-row";
-
-        row.dataset.characterId = character.id;
-
-        const zombieOptions = aliveZombies
-            .map(z => {
-                const label = z.isTurnedCharacter ? z.name : `좀비 #${z.id}`;
-                return `<option value="${z.id}">${label}</option>`;
-            })
-            .join("");
-
-        const allyOptions = aliveCharacters
-            .filter(c => c.id !== character.id)
-            .map(c => `<option value="${c.id}">${c.name}</option>`)
-            .join("");
-
-        row.innerHTML = `
-            <b>${character.name}</b>
-            <select class="actionType">
-                <option value="attack">공격(근력)</option>
-                <option value="evade">회피/도주(민첩)</option>
-                <option value="specialty">특기</option>
-                <option value="assistEvade">회피 보조</option>
-                <option value="none">행동 안 함</option>
-            </select>
-            <select class="actionTargetZombie">
-                ${zombieOptions}
-            </select>
-            <select class="actionTargetCharacter" style="display:none;">
-                ${allyOptions || `<option value="">보조 가능한 대상 없음</option>`}
-            </select>
-        `;
-
-        const actionTypeSelect = row.querySelector(".actionType");
-
-        const targetZombieSelect = row.querySelector(".actionTargetZombie");
-
-        const targetCharacterSelect = row.querySelector(".actionTargetCharacter");
-
-        const syncTargetVisibility = () => {
-
-            targetZombieSelect.style.display =
-                actionTypeSelect.value === "attack" ? "" : "none";
-
-            targetCharacterSelect.style.display =
-                actionTypeSelect.value === "assistEvade" ? "" : "none";
-
-        };
-
-        actionTypeSelect.addEventListener("change", syncTargetVisibility);
-
-        syncTargetVisibility();
-
-        wrap.appendChild(row);
-
+        wrap.appendChild(createActionRow(character, aliveZombies, aliveCharacters));
     });
 
     const btnResolve = document.createElement("button");
 
-    // ★ 추가: 체크박스 상태에 따라 버튼 문구 갱신
     const updateResolveButtonLabel = () => {
         btnResolve.textContent = skipCheckbox.checked
             ? "좀비 지목 확인 (좀비 선공)"
@@ -1646,34 +1791,10 @@ function renderRoundControls(battle) {
     updateResolveButtonLabel();
 
     btnResolve.addEventListener("click", () => {
-
-        const actions = {};
-
-        wrap.querySelectorAll(".action-row").forEach(row => {
-
-            const characterId = row.dataset.characterId;
-
-            const type = row.querySelector(".actionType").value;
-
-            const targetZombieId = row.querySelector(".actionTargetZombie").value;
-
-            const targetCharacterId = row.querySelector(".actionTargetCharacter").value;
-
-            if (type === "assistEvade" && !targetCharacterId) {
-                actions[characterId] = { type: "none" };
-                return;
-            }
-
-            actions[characterId] = { type, targetZombieId, targetCharacterId };
-
-        });
-
+        const actions = collectActionsFromRows(wrap);
         const skipRunnerPhase = skipCheckbox.checked;
-
         BattleManager.resolveRunnerAndTargetPhase(battle.id, actions, skipRunnerPhase);
-
         renderAllBattles();
-
     });
 
     wrap.appendChild(btnResolve);
@@ -1681,6 +1802,7 @@ function renderRoundControls(battle) {
     return wrap;
 
 }
+
 
 // ============================================
 // 전투 로그 저장 (텍스트 파일 다운로드)
