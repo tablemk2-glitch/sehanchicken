@@ -48,12 +48,12 @@ async function renderTable() {
     });
 }
 // ------------------------------
-// 스탯 값 보정 (1~5 범위)
+// 스탯 값 보정 (0~6 범위)
 // ------------------------------
 function clampStat(value) {
     const num = Number(value);
     if (isNaN(num)) return 3;
-    return Math.min(5, Math.max(1, num));
+    return Math.min(6, Math.max(0, num));
 }
 // ------------------------------
 // 저장
