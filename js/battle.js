@@ -88,11 +88,16 @@ const BattleManager = (() => {
     // ----------------------------------------
 
     function loadBattles() {
-
+    
         const raw = localStorage.getItem(BATTLE_STORAGE_KEY);
-
+    
         battles = raw ? JSON.parse(raw) : [];
-
+    
+        // ★ 추가: 이전 버전 데이터 호환 (phase 필드 없을 경우 기본값 채움)
+        battles.forEach(b => {
+            if (!b.phase) b.phase = "start";
+        });
+    
     }
 
     function saveBattles() {
@@ -202,23 +207,31 @@ const BattleManager = (() => {
 
         }
 
-        const battle = {
-
-            id: Date.now(),
-
-            name: name || "이름없는 전투",
-
-            round: 1,
-
-            status: "ongoing", // ongoing | victory | defeat
-
-            zombies,
-
-            characters: battleCharacters,
-
-            log: []
-
-        };
+    const battle = {
+    
+        id: Date.now(),
+    
+        name: name || "이름없는 전투",
+    
+        round: 1,
+    
+        status: "ongoing", // ongoing | victory | defeat
+    
+        phase: "start", // ★ 추가: "start"(행동 입력 대기) | "targeted"(좀비 지목 완료, 좀비 페이즈 대기)
+    
+        zombies,
+    
+        characters: battleCharacters,
+    
+        log: [],
+    
+        // ★ 추가: 1단계 → 2단계 사이에 필요한 임시 상태 (2단계 종료 시 초기화)
+        pendingZombieTargets: null,
+        pendingAssistedIds: null,
+        pendingAssistingIds: null,
+        pendingSummary: null
+    
+    };
 
         battles.push(battle);
 
@@ -624,26 +637,54 @@ function applyZombieHit(battle, target, attackResult, log, summary) {
 
 }
 
-    
-function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistingIds) {
+
+// ★ 변경: 좀비 지목만 담당 (1단계에서 호출)
+function pickZombieTarget(battle, zombie, log) {
 
     const aliveCharacters = battle.characters.filter(c => c.status === "alive");
 
+    const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+
     if (aliveCharacters.length === 0) {
 
-        const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
-
         log.push(`- ${zombieDisplayName}: 공격 가능한 대상 없음`);
+
+        return { zombieId: zombie.id, targetCharacterId: null };
+
+    }
+
+    const target = DiceEngine.randomChoice(aliveCharacters);
+
+    log.push(`- ${zombieDisplayName} → ${target.name}을(를) 지목!`);
+
+    return { zombieId: zombie.id, targetCharacterId: target.id };
+
+}
+
+// ★ 변경: 지목된 대상에 대한 실제 공격 판정/피해 적용 (2단계에서 호출)
+function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds) {
+
+    const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+
+    if (!targetCharacterId) {
+        return; // 지목 당시 대상 없음은 1단계에서 이미 로그됨
+    }
+
+    const target = battle.characters.find(c => c.id === targetCharacterId && c.status === "alive");
+
+    if (!target) {
+
+        log.push(`- ${zombieDisplayName}: 지목했던 대상이 더 이상 유효하지 않아 공격 취소`);
 
         return;
 
     }
-    const target = DiceEngine.randomChoice(aliveCharacters);
-    const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
-    log.push(`- ${zombieDisplayName} → ${target.name}을(를) 지목!`);
+
     const zombieStatObj = getZombieStatObject(zombie);
+
     const attackResult = rollStat(zombieStatObj, "strength");
-    log.push(`  공격 판정 ${formatRoll(attackResult)}`);
+
+    log.push(`- ${zombieDisplayName} → ${target.name} 공격 판정 ${formatRoll(attackResult)}`);
 
     if (summary) {
         summary.zombieAttacks.push(`${zombieDisplayName} 공격 판정 ${formatRoll(attackResult)}`);
@@ -654,21 +695,15 @@ function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistin
         return;
     }
 
-    // 회피 보조를 "받는" 캐릭터: 판정 없이 자동 회피 성공
     if (assistedIds && assistedIds.has(target.id)) {
         log.push(`  → ${target.name}은(는) 동료의 회피 보조를 받아 자동 회피 성공! 피해 없음`);
-        if (summary) {
-            summary.evades.push(`${target.name} 회피 자동 성공 (동료 보조)`);
-        }
+        if (summary) summary.evades.push(`${target.name} 회피 자동 성공 (동료 보조)`);
         return;
     }
 
-    // ★ 추가: 회피 보조를 "주는" 캐릭터가 지목당한 경우 → 판정 없이 자동 회피 실패
     if (assistingIds && assistingIds.has(target.id)) {
         log.push(`  → ${target.name}은(는) 동료를 보조하느라 자신을 방어하지 못해 자동으로 피격!`);
-        if (summary) {
-            summary.evades.push(`${target.name} 회피 자동 실패 (동료 보조 중)`);
-        }
+        if (summary) summary.evades.push(`${target.name} 회피 자동 실패 (동료 보조 중)`);
         applyZombieHit(battle, target, attackResult, log, summary);
         return;
     }
@@ -677,9 +712,7 @@ function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistin
 
     log.push(`  → ${target.name} 회피 판정 ${formatRoll(evadeResult)}`);
 
-    if (summary) {
-        summary.evades.push(`${target.name} 회피(민첩) 판정 ${formatRoll(evadeResult)}`);
-    }
+    if (summary) summary.evades.push(`${target.name} 회피(민첩) 판정 ${formatRoll(evadeResult)}`);
 
     const winner = resolveContest(
         attackResult,
@@ -694,6 +727,7 @@ function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistin
     }
 
     if (winner === "defender") {
+
         log.push(
             evadeResult.success
                 ? `  → 회피 성공! 피해 없음`
@@ -704,6 +738,7 @@ function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistin
             target.status = "down";
             log.push(`  → ${target.name} 전투불능!`);
         }
+
         return;
     }
 
@@ -721,166 +756,216 @@ function resolveZombieAttack(battle, zombie, log, summary, assistedIds, assistin
     // 라운드 진행
     // ============================================
 
-function resolveRound(battleId, actions, skipRunnerPhase) {
-
-    const battle = getBattle(battleId);
-
-    if (!battle || battle.status !== "ongoing") return battle;
-
-    const log = [];
-
-    const roundSummary = {
-        attacks: [],
-        flees: [],
-        assists: [],
-        zombieAttacks: [],
-        evades: [],
-        lucks: []
-    };
-
-    const assistedCharacterIds = new Set();   // 보조를 "받는" 쪽
-    const assistingCharacterIds = new Set();  // ★ 추가: 보조를 "주는" 쪽
-
-    log.push(`===== ${battle.round} 라운드 =====`);
-
-    if (!skipRunnerPhase) {
-
-        log.push(`[러너 페이즈]`);
-
-        battle.characters.forEach(character => {
-
-            if (character.status !== "alive") return;
-
-            const action = actions[character.id];
-
-            if (!action || action.type === "none") {
-
-                log.push(`- ${character.name}: 행동 없음`);
-
-                return;
-
-            }
-
-            if (action.type === "attack") {
-
-                resolveAttack(battle, character, action.targetZombieId, log, roundSummary);
-
-            }
-
-            else if (action.type === "evade") {
-                resolveEvade(character, log, roundSummary);
-            }
-
-            else if (action.type === "specialty") {
-                resolveSpecialty(character, log);
-            }
-
-        // 회피 보조
-                else if (action.type === "assistEvade") {
-    
-                    const targetCharacter = battle.characters.find(
-                        c => String(c.id) === String(action.targetCharacterId)
-                            && c.status === "alive"
-                            && c.id !== character.id
-                    );
-    
-                    if (!targetCharacter) {
-                        log.push(`- ${character.name}: 회피 보조 대상이 유효하지 않아 취소`);
+        // ============================================
+        // 1단계: 러너 페이즈 + 좀비 지목
+        // ============================================
+        
+        function resolveRunnerAndTargetPhase(battleId, actions, skipRunnerPhase) {
+        
+            const battle = getBattle(battleId);
+        
+            if (!battle || battle.status !== "ongoing") return battle;
+        
+            if ((battle.phase || "start") !== "start") return battle; // 이미 1단계 완료됨
+        
+            const log = [];
+        
+            const summary = {
+                attacks: [],
+                flees: [],
+                assists: [],
+                zombieAttacks: [],
+                evades: [],
+                lucks: []
+            };
+        
+            const assistedCharacterIds = new Set();
+            const assistingCharacterIds = new Set();
+        
+            log.push(`===== ${battle.round} 라운드 =====`);
+        
+            if (!skipRunnerPhase) {
+        
+                log.push(`[러너 페이즈]`);
+        
+                battle.characters.forEach(character => {
+        
+                    if (character.status !== "alive") return;
+        
+                    const action = actions[character.id];
+        
+                    if (!action || action.type === "none") {
+                        log.push(`- ${character.name}: 행동 없음`);
                         return;
                     }
-    
-                    // 보조를 "주는" 쪽은 판정 성공/실패와 무관하게 자기 방어에 소홀해짐
-                    assistingCharacterIds.add(character.id);
-    
-                    const assistSuccess = resolveAssistEvade(character, targetCharacter, log, roundSummary);
-    
-                    // ★ 변경: 판정에 성공했을 때만 대상을 보호 목록에 추가.
-                    // Set이므로 이미 다른 동료의 보조로 추가돼 있다면 유지되고,
-                    // 이번 보조가 실패해도 기존 성공 기록이 지워지지 않음
-                    // → "여러 명이 보조 시 한 명이라도 성공하면 보호 성립" 조건 자동 충족
-                    if (assistSuccess) {
-                        assistedCharacterIds.add(targetCharacter.id);
+        
+                    if (action.type === "attack") {
+        
+                        resolveAttack(battle, character, action.targetZombieId, log, summary);
+        
                     }
-                }
-        });
-    }
-
-    else {
-
-        log.push(`[러너 페이즈 생략 - 좀비 선공]`);
-
-    }
-
-    log.push(`[좀비 페이즈]`);
-
-    battle.zombies.forEach(zombie => {
-
-        if (!zombie.alive) return;
-
-        resolveZombieAttack(battle, zombie, log, roundSummary, assistedCharacterIds, assistingCharacterIds);
-
-    });
-
-    log.push(`----- ${battle.round}라운드 판정 요약 -----`);
-
-    if (roundSummary.attacks.length > 0) {
-        log.push(`러너 페이즈`);
-        roundSummary.attacks.forEach(entry => log.push(entry));
-    }
-
-    if (roundSummary.flees.length > 0) {
-        log.push(`캐릭터 도주`);
-        roundSummary.flees.forEach(entry => log.push(entry));
-    }
-
-    if (roundSummary.assists.length > 0) {
-        log.push(`회피 보조`);
-        roundSummary.assists.forEach(entry => log.push(entry));
-    }
-
-    if (roundSummary.zombieAttacks.length > 0) {
-        log.push(`좀비 페이즈`);
-        roundSummary.zombieAttacks.forEach(entry => log.push(entry));
-    }
-
-    if (roundSummary.evades.length > 0) {
-        log.push(`캐릭터 회피`);
-        roundSummary.evades.forEach(entry => log.push(entry));
-    }
-
-    if (roundSummary.lucks.length > 0) {
-        log.push(`캐릭터 행운`);
-        roundSummary.lucks.forEach(entry => log.push(entry));
-    }
-
-    battle.log.push(...log);
-    const allZombiesDead = battle.zombies.every(z => !z.alive);
-    const allCharactersOut = battle.characters.every(c => c.status !== "alive");
-
-    if (allZombiesDead) {
-        battle.status = "victory";
-        battle.log.push(`===== 전투 종료: 좀비 전멸, 승리! =====`);
-    }
-
-    else if (allCharactersOut) {
-
-        battle.status = "defeat";
-
-        battle.log.push(`===== 전투 종료: 모든 캐릭터 전투불능/도주 =====`);
-
-    }
-
-    else {
-
-        battle.round += 1;
-
-    }
-
-    saveBattles();
-
-    return battle;
-
-}
+        
+                    else if (action.type === "evade") {
+                        resolveEvade(character, log, summary);
+                    }
+        
+                    else if (action.type === "specialty") {
+                        resolveSpecialty(character, log);
+                    }
+        
+                    else if (action.type === "assistEvade") {
+        
+                        const targetCharacter = battle.characters.find(
+                            c => String(c.id) === String(action.targetCharacterId)
+                                && c.status === "alive"
+                                && c.id !== character.id
+                        );
+        
+                        if (!targetCharacter) {
+                            log.push(`- ${character.name}: 회피 보조 대상이 유효하지 않아 취소`);
+                            return;
+                        }
+        
+                        assistingCharacterIds.add(character.id);
+        
+                        const assistSuccess = resolveAssistEvade(character, targetCharacter, log, summary);
+        
+                        if (assistSuccess) {
+                            assistedCharacterIds.add(targetCharacter.id);
+                        }
+                    }
+                });
+        
+            } else {
+        
+                log.push(`[러너 페이즈 생략 - 좀비 선공]`);
+        
+            }
+        
+            // ★ 러너 선공이든 좀비 선공이든, 여기서 항상 "좀비 지목"까지만 진행
+            log.push(`[좀비 지목]`);
+        
+            const targets = [];
+        
+            battle.zombies.forEach(zombie => {
+        
+                if (!zombie.alive) return; // 러너 페이즈에서 쓰러진 좀비는 지목 제외
+        
+                targets.push(pickZombieTarget(battle, zombie, log));
+        
+            });
+        
+            battle.log.push(...log);
+        
+            battle.phase = "targeted";
+            battle.pendingZombieTargets = targets;
+            battle.pendingAssistedIds = Array.from(assistedCharacterIds);
+            battle.pendingAssistingIds = Array.from(assistingCharacterIds);
+            battle.pendingSummary = summary;
+        
+            saveBattles();
+        
+            return battle;
+        
+        }
+        
+        // ============================================
+        // 2단계: 좀비 페이즈 해결 + 라운드 종료
+        // ============================================
+        
+        function resolveZombiePhase(battleId) {
+        
+            const battle = getBattle(battleId);
+        
+            if (!battle || battle.status !== "ongoing") return battle;
+        
+            if (battle.phase !== "targeted") return battle; // 1단계가 아직 안 끝남
+        
+            const log = [];
+        
+            const summary = battle.pendingSummary || {
+                attacks: [], flees: [], assists: [], zombieAttacks: [], evades: [], lucks: []
+            };
+        
+            const assistedIds = new Set(battle.pendingAssistedIds || []);
+            const assistingIds = new Set(battle.pendingAssistingIds || []);
+        
+            log.push(`[좀비 페이즈]`);
+        
+            (battle.pendingZombieTargets || []).forEach(({ zombieId, targetCharacterId }) => {
+        
+                const zombie = battle.zombies.find(z => String(z.id) === String(zombieId) && z.alive);
+        
+                if (!zombie) return; // 지목 이후 GM이 수동으로 처리했거나 이미 전투불능
+        
+                resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds);
+        
+            });
+        
+            // ★ 라운드 요약은 라운드가 종료되는 이 시점에만 출력
+            log.push(`----- ${battle.round}라운드 판정 요약 -----`);
+        
+            if (summary.attacks.length > 0) {
+                log.push(`러너 페이즈`);
+                summary.attacks.forEach(entry => log.push(entry));
+            }
+        
+            if (summary.flees.length > 0) {
+                log.push(`캐릭터 도주`);
+                summary.flees.forEach(entry => log.push(entry));
+            }
+        
+            if (summary.assists.length > 0) {
+                log.push(`회피 보조`);
+                summary.assists.forEach(entry => log.push(entry));
+            }
+        
+            if (summary.zombieAttacks.length > 0) {
+                log.push(`좀비 페이즈`);
+                summary.zombieAttacks.forEach(entry => log.push(entry));
+            }
+        
+            if (summary.evades.length > 0) {
+                log.push(`캐릭터 회피`);
+                summary.evades.forEach(entry => log.push(entry));
+            }
+        
+            if (summary.lucks.length > 0) {
+                log.push(`캐릭터 행운`);
+                summary.lucks.forEach(entry => log.push(entry));
+            }
+        
+            battle.log.push(...log);
+        
+            const allZombiesDead = battle.zombies.every(z => !z.alive);
+            const allCharactersOut = battle.characters.every(c => c.status !== "alive");
+        
+            if (allZombiesDead) {
+                battle.status = "victory";
+                battle.log.push(`===== 전투 종료: 좀비 전멸, 승리! =====`);
+            }
+        
+            else if (allCharactersOut) {
+                battle.status = "defeat";
+                battle.log.push(`===== 전투 종료: 모든 캐릭터 전투불능/도주 =====`);
+            }
+        
+            else {
+                battle.round += 1;
+            }
+        
+            // ★ 다음 라운드를 위해 임시 상태 초기화
+            battle.phase = "start";
+            battle.pendingZombieTargets = null;
+            battle.pendingAssistedIds = null;
+            battle.pendingAssistingIds = null;
+            battle.pendingSummary = null;
+        
+            saveBattles();
+        
+            return battle;
+        
+        }
 
     // ============================================
     // 반환
@@ -893,7 +978,8 @@ return {
         deleteBattle,
         getBattle,
         get battles() { return battles; },
-        resolveRound,
+        resolveRunnerAndTargetPhase, // ★ 변경
+        resolveZombiePhase,          // ★ 변경
         rollStat,
         pickRandomBodyPart,
         convertCharacterToZombieEnemy,
@@ -1442,6 +1528,33 @@ function renderRoundControls(battle) {
 
     wrap.className = "round-controls";
 
+    // ★ 2단계 대기 상태: 좀비 지목까지 끝났고 좀비 페이즈만 남음
+    if (battle.phase === "targeted") {
+
+        wrap.innerHTML = `
+            <h3>이번 라운드 행동</h3>
+            <p>좀비 지목이 완료되었습니다. 좀비 페이즈를 진행하세요.</p>
+        `;
+
+        const btnResolveZombie = document.createElement("button");
+
+        btnResolveZombie.textContent = "좀비 페이즈 진행";
+
+        btnResolveZombie.addEventListener("click", () => {
+
+            BattleManager.resolveZombiePhase(battle.id);
+
+            renderAllBattles();
+
+        });
+
+        wrap.appendChild(btnResolveZombie);
+
+        return wrap;
+
+    }
+
+    // ★ 1단계 대기 상태: 행동 입력
     wrap.innerHTML = `<h3>이번 라운드 행동</h3>`;
 
     const skipRow = document.createElement("label");
@@ -1452,6 +1565,8 @@ function renderRoundControls(battle) {
     `;
 
     wrap.appendChild(skipRow);
+
+    const skipCheckbox = skipRow.querySelector(".skipRunnerPhase");
 
     const aliveCharacters = battle.characters.filter(c => c.status === "alive");
 
@@ -1465,7 +1580,6 @@ function renderRoundControls(battle) {
 
         row.dataset.characterId = character.id;
 
-        // 전환된 캐릭터는 원래 이름을, 일반 좀비는 "좀비 #n"으로 표기
         const zombieOptions = aliveZombies
             .map(z => {
                 const label = z.isTurnedCharacter ? z.name : `좀비 #${z.id}`;
@@ -1473,7 +1587,6 @@ function renderRoundControls(battle) {
             })
             .join("");
 
-        // ★ 추가: 회피 보조 대상 후보 (자기 자신 제외, 생존 캐릭터만)
         const allyOptions = aliveCharacters
             .filter(c => c.id !== character.id)
             .map(c => `<option value="${c.id}">${c.name}</option>`)
@@ -1514,7 +1627,7 @@ function renderRoundControls(battle) {
 
         actionTypeSelect.addEventListener("change", syncTargetVisibility);
 
-        syncTargetVisibility(); // 초기 상태 반영
+        syncTargetVisibility();
 
         wrap.appendChild(row);
 
@@ -1522,7 +1635,15 @@ function renderRoundControls(battle) {
 
     const btnResolve = document.createElement("button");
 
-    btnResolve.textContent = "라운드 진행";
+    // ★ 추가: 체크박스 상태에 따라 버튼 문구 갱신
+    const updateResolveButtonLabel = () => {
+        btnResolve.textContent = skipCheckbox.checked
+            ? "좀비 지목 확인 (좀비 선공)"
+            : "1단계 진행 (러너 페이즈 → 좀비 지목)";
+    };
+
+    skipCheckbox.addEventListener("change", updateResolveButtonLabel);
+    updateResolveButtonLabel();
 
     btnResolve.addEventListener("click", () => {
 
@@ -1536,24 +1657,20 @@ function renderRoundControls(battle) {
 
             const targetZombieId = row.querySelector(".actionTargetZombie").value;
 
-            // ★ 추가: 회피 보조 대상 캐릭터 id
             const targetCharacterId = row.querySelector(".actionTargetCharacter").value;
 
             if (type === "assistEvade" && !targetCharacterId) {
-
                 actions[characterId] = { type: "none" };
-
                 return;
-
             }
 
             actions[characterId] = { type, targetZombieId, targetCharacterId };
 
         });
 
-        const skipRunnerPhase = wrap.querySelector(".skipRunnerPhase").checked;
+        const skipRunnerPhase = skipCheckbox.checked;
 
-        BattleManager.resolveRound(battle.id, actions, skipRunnerPhase);
+        BattleManager.resolveRunnerAndTargetPhase(battle.id, actions, skipRunnerPhase);
 
         renderAllBattles();
 
