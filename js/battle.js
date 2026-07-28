@@ -1044,28 +1044,39 @@ async function handleCreateBattle() {
 // ============================================
 
 function renderAllBattles() {
-
     const area = document.getElementById("battleArea");
-
     area.innerHTML = "";
 
     if (BattleManager.battles.length === 0) {
-
         area.innerHTML = `<p class="placeholder-text" id="noBattlePlaceholder">아직 생성된 전투가 없습니다.</p>`;
-
         return;
-
     }
 
     BattleManager.battles.forEach(battle => {
-
-        area.appendChild(renderBattleCard(battle));
-
+        const card = renderBattleCard(battle);
+        area.appendChild(card);
+        restoreBattleLogScroll(battle, card); // ★ 추가
     });
+}
 
+// ★ 추가: 재렌더링 후 로그박스 스크롤 위치 복원
+function restoreBattleLogScroll(battle, card) {
+    const logBox = card.querySelector(".battle-log");
+    if (!logBox) return;
+
+    const saved = battleLogScrollState.get(battle.id);
+
+    if (!saved || saved.atBottom) {
+        // 저장된 위치가 없거나(최초 렌더) 원래 맨 아래를 보고 있었다면 → 최신 로그로 계속 따라감
+        logBox.scrollTop = logBox.scrollHeight;
+    } else {
+        // 과거 기록을 읽던 중이었다면 → 그 위치 그대로 유지
+        logBox.scrollTop = saved.scrollTop;
+    }
 }
 
 const collapsedBattleIds = new Set();
+const battleLogScrollState = new Map(); // ★ 추가: battleId -> { scrollTop, atBottom }
 
 function renderBattleCard(battle) {
 
@@ -1401,20 +1412,22 @@ const charListEl = card.querySelector(".character-list");
     }
 
     const logBox = document.createElement("pre");
-
     logBox.className = "battle-log";
-
     logBox.style.maxHeight = "200px";
     logBox.style.overflowY = "auto";
     logBox.style.background = "#111";
     logBox.style.color = "#0f0";
     logBox.style.padding = "8px";
     logBox.style.marginTop = "8px";
-
     logBox.textContent = battle.log.join("\n");
-
+    
+    // ★ 추가: 스크롤 위치 기억 (사용자가 위로 스크롤해서 과거 로그를 보는 중인지 추적)
+    logBox.addEventListener("scroll", () => {
+        const atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 4;
+        battleLogScrollState.set(battle.id, { scrollTop: logBox.scrollTop, atBottom });
+    });
+    
     bodyEl.appendChild(logBox);
-
     return card;
 
 }
