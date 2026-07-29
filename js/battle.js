@@ -1907,7 +1907,7 @@ function renderRoundControls(battle) {
 
     wrap.className = "round-controls";
 
-    const aliveCharacters = battle.characters.filter(c => c.status === "alive");
+    const aliveCharacters = battle.characters.filter(c => BattleManager.isCharacterActive(battle, c));
     const aliveZombies = battle.zombies.filter(z => z.alive);
 
     // ★ 3단계 대기: 반응 행동까지 끝났고 좀비 페이즈만 남음
