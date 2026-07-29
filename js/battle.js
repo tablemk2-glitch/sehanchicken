@@ -277,6 +277,14 @@ const BattleManager = (() => {
 
     }
 
+    // ★ 추가: 생존 + 이미 전투 합류 완료(대기 라운드 아님) 여부
+    function isCharacterActive(battle, character) {
+    
+        return character.status === "alive"
+            && (!character.joinRound || battle.round >= character.joinRound);
+    
+    }
+
     // ----------------------------------------
     // 대항 판정
     // ----------------------------------------
@@ -481,6 +489,65 @@ function resolveAssistEvade(character, targetCharacter, log, summary) {
 
 }
 
+// ============================================
+// 전투 중간 캐릭터 합류 (비동기: Firestore에서 원본 로드)
+// ============================================
+
+async function addCharacterToBattle(battleId, characterId) {
+
+    const battle = getBattle(battleId);
+
+    if (!battle || battle.status !== "ongoing") return null;
+
+    if (battle.characters.some(c => String(c.id) === String(characterId))) {
+        return battle; // 이미 참여 중
+    }
+
+    const source = await getCharacters();
+
+    const original = source.find(c => String(c.id) === String(characterId));
+
+    if (!original) return null;
+
+    const newCharacter = {
+
+        id: original.id,
+
+        name: original.name,
+
+        profile: original.profile,
+
+        stats: { ...original.stats },
+
+        specialty: original.specialty || "",
+
+        specialtyValue: typeof original.specialtyValue === "number"
+            ? original.specialtyValue
+            : null,
+
+        hp: CHARACTER_MAX_HP,
+
+        maxHp: CHARACTER_MAX_HP,
+
+        status: "alive",
+
+        infections: [],
+
+        joinRound: battle.round + 1 // ★ 다음 라운드부터 행동 가능
+
+    };
+
+    battle.characters.push(newCharacter);
+
+    battle.log.push(`➕ ${newCharacter.name}이(가) 전투에 합류했습니다. (${newCharacter.joinRound}라운드부터 행동 가능)`);
+
+    saveBattles();
+
+    return battle;
+
+}
+
+    
     // ============================================
     // 캐릭터 → 좀비 진영 수동 전환 (진행자용)
     // ============================================
@@ -675,9 +742,8 @@ function applyZombieHit(battle, target, attackResult, log, summary) {
 
 // ★ 변경: 좀비 지목만 담당 (1단계에서 호출)
 function pickZombieTarget(battle, zombie, log) {
-
-    const aliveCharacters = battle.characters.filter(c => c.status === "alive");
-
+    
+    const aliveCharacters = battle.characters.filter(c => isCharacterActive(battle, c));
     const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
 
     if (aliveCharacters.length === 0) {
@@ -818,12 +884,18 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         
                 log.push(`[러너 페이즈]`);
         
+                //대기
                 battle.characters.forEach(character => {
-        
+                
                     if (character.status !== "alive") return;
-        
+                
+                    if (!isCharacterActive(battle, character)) {
+                        log.push(`- ${character.name}: 전투 합류 대기 중 (${character.joinRound}라운드부터 행동 가능)`);
+                        return;
+                    }
+                
                     const action = actions[character.id];
-        
+                        
                     if (!action || action.type === "none") {
                         log.push(`- ${character.name}: 행동 없음`);
                         return;
@@ -926,10 +998,16 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
     
         log.push(`[반응 페이즈 - 좀비 지목 공개 후 행동]`);
     
+        // 변경 후
         battle.characters.forEach(character => {
-    
+        
             if (character.status !== "alive") return;
-    
+        
+            if (!isCharacterActive(battle, character)) {
+                log.push(`- ${character.name}: 전투 합류 대기 중 (${character.joinRound}라운드부터 행동 가능)`);
+                return;
+            }
+        
             const action = actions[character.id];
     
             if (!action || action.type === "none") {
@@ -1104,16 +1182,18 @@ return {
         deleteBattle,
         getBattle,
         get battles() { return battles; },
-        resolveRunnerAndTargetPhase, // ★ 변경
-        resolveReactionPhase,       // ★ 추가
-        resolveZombiePhase,          // ★ 변경
+        resolveRunnerAndTargetPhase,
+        resolveReactionPhase,
+        resolveZombiePhase,
         rollStat,
         pickRandomBodyPart,
         convertCharacterToZombieEnemy,
+        addCharacterToBattle,   // ★ 추가
+        isCharacterActive,      // ★ 추가 (UI에서 대기 상태 판단용)
         setZombieHits,
         setCharacterHp,
-        addCharacterInfection,      // ★ 추가
-        removeCharacterInfection,   // ★ 추가
+        addCharacterInfection,
+        removeCharacterInfection,
         BODY_PARTS,
         ZOMBIE_STAT_LEVEL,
         CHARACTER_MAX_HP
@@ -1448,17 +1528,20 @@ const charListEl = card.querySelector(".character-list");
         row.style.gap = "8px";
         row.style.flexWrap = "wrap";
 
+        // 변경 후
         const statusText2 = {
             alive: "생존",
             fled: "도주",
             down: "전투불능"
         }[character.status];
-
+        
+        const isWaitingToJoin = character.joinRound && battle.round < character.joinRound;
+        
         const infoSpan = document.createElement("span");
-
+        
         infoSpan.textContent =
             `${character.name} - HP ${character.hp}/${character.maxHp} `
-            + `(${statusText2})`;
+            + `(${statusText2}${isWaitingToJoin ? `, ${character.joinRound}라운드부터 합류` : ""})`;
 
         row.appendChild(infoSpan);
 
@@ -1617,7 +1700,72 @@ const charListEl = card.querySelector(".character-list");
 
     });
     
-
+    if (battle.status === "ongoing") {
+    
+        const addCharWrap = document.createElement("div");
+    
+        addCharWrap.className = "add-character-wrap";
+        addCharWrap.style.marginTop = "12px";
+    
+        addCharWrap.innerHTML = `
+            <h3>전투 참여 캐릭터 추가</h3>
+            <select class="addCharacterSelect"><option value="">불러오는 중...</option></select>
+            <button type="button" class="btnAddCharacter">추가 (다음 라운드부터 행동 가능)</button>
+        `;
+    
+        const addSelect = addCharWrap.querySelector(".addCharacterSelect");
+        const btnAdd = addCharWrap.querySelector(".btnAddCharacter");
+    
+        getCharacters().then(allCharacters => {
+    
+            const existingIds = new Set(battle.characters.map(c => String(c.id)));
+    
+            const available = allCharacters.filter(c => !existingIds.has(String(c.id)));
+    
+            addSelect.innerHTML = available.length > 0
+                ? available.map(c => `<option value="${c.id}">${c.name}</option>`).join("")
+                : `<option value="">추가 가능한 캐릭터 없음</option>`;
+    
+        });
+    
+        btnAdd.addEventListener("click", async (e) => {
+    
+            e.stopPropagation();
+    
+            const characterId = addSelect.value;
+    
+            if (!characterId) return;
+    
+            btnAdd.disabled = true;
+    
+            try {
+    
+                await BattleManager.addCharacterToBattle(battle.id, characterId);
+    
+                renderAllBattles();
+    
+            }
+    
+            catch (error) {
+    
+                alert("캐릭터 추가 중 오류가 발생했습니다.");
+                console.error(error);
+    
+            }
+    
+            finally {
+    
+                btnAdd.disabled = false;
+    
+            }
+    
+        });
+    
+        bodyEl.appendChild(addCharWrap);
+    
+    }
+    
+    
     if (battle.status === "ongoing") {
 
         bodyEl.appendChild(renderRoundControls(battle));
