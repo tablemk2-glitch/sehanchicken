@@ -229,6 +229,7 @@ const BattleManager = (() => {
         pendingZombieTargets: null,
         pendingAssistedIds: null,
         pendingAssistingIds: null,
+        pendingSelfDodgeIds: null,  // ★ 추가
         pendingSummary: null
     
     };
@@ -433,7 +434,7 @@ function resolveFlee(character, log, summary) {
 }
 
 // ★ 신규: 회피는 전투 이탈 없이 이번 라운드 공격만 회피
-function resolveDodge(character, log, summary, guaranteedEvadeIds) {
+function resolveDodge(character, log, summary, guaranteedEvadeIds, selfDodgeIds) {
 
     const result = rollStat(character, "agility");
 
@@ -445,6 +446,7 @@ function resolveDodge(character, log, summary, guaranteedEvadeIds) {
 
     if (result.success) {
         guaranteedEvadeIds.add(character.id);
+        selfDodgeIds.add(character.id);
         log.push(`  → 회피 성공, 이번 라운드 공격 자동 회피`);
         return;
     }
@@ -796,11 +798,26 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         return;
     }
 
-    if (assistedIds && assistedIds.has(target.id)) {
-        log.push(`  → ${target.name}은(는) 동료의 회피 보조를 받아 자동 회피 성공! 피해 없음`);
-        if (summary) summary.evades.push(`${target.name} 회피 자동 성공 (동료 보조)`);
-        return;
-    }
+            if (assistedIds && assistedIds.has(target.id)) {
+        
+                const isSelfDodge = selfDodgeIds && selfDodgeIds.has(target.id);
+        
+                log.push(
+                    isSelfDodge
+                        ? `  → ${target.name}은(는) 스스로 회피에 성공해 자동 회피! 피해 없음`
+                        : `  → ${target.name}은(는) 동료의 회피 보조를 받아 자동 회피 성공! 피해 없음`
+                );
+        
+                if (summary) {
+                    summary.evades.push(
+                        isSelfDodge
+                            ? `${target.name} 회피 자동 성공 (자력 회피)`
+                            : `${target.name} 회피 자동 성공 (동료 보조)`
+                    );
+                }
+        
+                return;
+            }
 
     if (assistingIds && assistingIds.has(target.id)) {
         log.push(`  → ${target.name}은(는) 동료를 보조하느라 자신을 방어하지 못해 자동으로 피격!`);
@@ -877,6 +894,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         
             const assistedCharacterIds = new Set();
             const assistingCharacterIds = new Set();
+            const selfDodgeIds = new Set(); // ★ 추가
         
             log.push(`===== ${battle.round} 라운드 =====`);
         
@@ -912,7 +930,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
                     }
                     
                     else if (action.type === "dodge") {
-                        resolveDodge(character, log, summary, assistedCharacterIds);
+                        resolveDodge(character, log, summary, assistedCharacterIds, selfDodgeIds);
                     }
         
                     else if (action.type === "specialty") {
@@ -967,6 +985,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             battle.pendingZombieTargets = targets;
             battle.pendingAssistedIds = Array.from(assistedCharacterIds);
             battle.pendingAssistingIds = Array.from(assistingCharacterIds);
+            battle.pendingSelfDodgeIds = Array.from(selfDodgeIds); 
             battle.pendingSummary = summary;
         
             saveBattles();
@@ -995,6 +1014,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
     
         const assistedCharacterIds = new Set(battle.pendingAssistedIds || []);
         const assistingCharacterIds = new Set(battle.pendingAssistingIds || []);
+        const selfDodgeIds = new Set(battle.pendingSelfDodgeIds || []);
     
         log.push(`[반응 페이즈 - 좀비 지목 공개 후 행동]`);
     
@@ -1024,7 +1044,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             }
             
             else if (action.type === "dodge") {
-                resolveDodge(character, log, summary, assistedCharacterIds);
+                resolveDodge(character, log, summary, assistedCharacterIds, selfDodgeIds);
             }
     
             else if (action.type === "specialty") {
@@ -1060,6 +1080,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         battle.phase = "reacted";
         battle.pendingAssistedIds = Array.from(assistedCharacterIds);
         battle.pendingAssistingIds = Array.from(assistingCharacterIds);
+        battle.pendingSelfDodgeIds = Array.from(selfDodgeIds);
         battle.pendingSummary = summary;
     
         saveBattles();
@@ -1088,6 +1109,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         
             const assistedIds = new Set(battle.pendingAssistedIds || []);
             const assistingIds = new Set(battle.pendingAssistingIds || []);
+            const selfDodgeIds = new Set(battle.pendingSelfDodgeIds || []);
         
             log.push(`[좀비 페이즈]`);
         
@@ -1096,8 +1118,8 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
                 const zombie = battle.zombies.find(z => String(z.id) === String(zombieId) && z.alive);
         
                 if (!zombie) return; // 지목 이후 GM이 수동으로 처리했거나 이미 전투불능
-        
-                resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds);
+                
+                resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds, selfDodgeIds);
         
             });
         
@@ -1163,6 +1185,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             battle.pendingZombieTargets = null;
             battle.pendingAssistedIds = null;
             battle.pendingAssistingIds = null;
+            battle.pendingSelfDodgeIds = null; 
             battle.pendingSummary = null;
         
             saveBattles();
