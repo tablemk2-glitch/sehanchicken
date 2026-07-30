@@ -1963,7 +1963,7 @@ function renderRoundControls(battle) {
         });
 
         const btnResolveReaction = document.createElement("button");
-        btnResolveReaction.textContent = "반응 행동 확정";
+        btnResolveReaction.textContent = "반응 행동 확정/좀비 페이즈 진행";
 
         btnResolveReaction.addEventListener("click", () => {
             const actions = collectActionsFromRows(wrap);
