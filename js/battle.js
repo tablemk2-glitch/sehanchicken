@@ -765,7 +765,7 @@ function pickZombieTarget(battle, zombie, log) {
 }
 
 // ★ 변경: 지목된 대상에 대한 실제 공격 판정/피해 적용 (2단계에서 호출)
-function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds) {
+function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds, selfDodgeIds) {
 
     const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
 
@@ -1968,6 +1968,7 @@ function renderRoundControls(battle) {
         btnResolveReaction.addEventListener("click", () => {
             const actions = collectActionsFromRows(wrap);
             BattleManager.resolveReactionPhase(battle.id, actions);
+            BattleManager.resolveZombiePhase(battle.id); // ★ 반응 행동 확정과 동시에 좀비 페이즈까지 이어서 진행
             renderAllBattles();
         });
 
