@@ -79,11 +79,18 @@ async function loadCharacterList() {
         btn.addEventListener("click", () => {
             const isSelected = btn.classList.toggle("selected");
             preview.style.display = isSelected ? "block" : "none";
+        
             if (isSelected) {
                 selectedCharacterIds.add(character.id);
+                btn.style.backgroundColor = "#4a90e2";
+                btn.style.color = "#ffffff";
+                btn.style.borderColor = "#4a90e2";
             }
             else {
                 selectedCharacterIds.delete(character.id);
+                btn.style.backgroundColor = "";
+                btn.style.color = "";
+                btn.style.borderColor = "";
             }
         });
 
