@@ -664,6 +664,12 @@ table button {
 
 }
 
+.character-select-item.selected {
+    background-color: #4a90e2;
+    color: #ffffff;
+    border-color: #4a90e2;
+}
+
 /* ----------------------------------------
    # Footer
    ---------------------------------------- */
