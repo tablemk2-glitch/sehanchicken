@@ -78,3 +78,59 @@
     min-height: 1.6em;
 
 }
+
+
+/* 선택된 캐릭터 버튼 색상 구분 */
+.character-select-item {
+    padding: 8px 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.character-select-item:hover {
+    background: #f0f2f8;
+}
+
+.character-select-item.selected {
+    background: #E2211C;
+    color: #fff;
+    border-color: #b81913;
+    font-weight: bold;
+}
+
+/* 캐릭터별 상세 영역 (스탯 선택 + 미리보기) */
+.character-detail {
+    margin-top: 6px;
+    padding: 10px;
+    background: #f5f7fb;
+    border-radius: 8px;
+    border-left: 3px solid #E2211C;
+}
+
+.character-stat-select {
+    display: block;
+    margin-bottom: 6px;
+    padding: 4px 8px;
+}
+
+.character-preview {
+    font-size: 0.9em;
+    color: #555;
+}
+
+#btnApplyAll {
+    margin-left: 8px;
+    padding: 4px 10px;
+    font-size: 0.85em;
+    background: #eef1fa;
+    border: 1px solid #ccd;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#btnApplyAll:hover {
+    background: #dde4f7;
+}
