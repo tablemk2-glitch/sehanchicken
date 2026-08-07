@@ -9,6 +9,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document
         .getElementById("btnCopyResult")
         .addEventListener("click", copyResultText);
+    document
+        .getElementById("btnApplyAll")
+        .addEventListener("click", applyStatToAllSelected);
 });
 // ----------------------------------------
 // 스탯 이름 변환
@@ -38,20 +41,36 @@ function buildCharacterPreview(character) {
     return parts.join(" · ");
 }
 // ----------------------------------------
-// 선택된 캐릭터 id 저장소
+// 선택된 캐릭터 id -> 개별 스탯 매핑
+// (같은 스탯을 공유하지 않고, 캐릭터마다 다른 스탯을 지정할 수 있게 Map 사용)
 // ----------------------------------------
-const selectedCharacterIds = new Set();
+const selectedCharacterStats = new Map();
 // ----------------------------------------
 // 캐릭터 목록 캐시 (판정 시 다시 불러오지 않기 위함)
 // ----------------------------------------
 let cachedCharacters = [];
+// ----------------------------------------
+// 스탯 select 엘리먼트 생성 (재사용)
+// ----------------------------------------
+function createStatSelect(defaultValue) {
+    const select = document.createElement("select");
+    select.className = "character-stat-select";
+    Object.entries(statNames).forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        select.appendChild(option);
+    });
+    select.value = defaultValue;
+    return select;
+}
 // ----------------------------------------
 // 캐릭터 목록 출력 (버튼 방식)
 // ----------------------------------------
 async function loadCharacterList() {
     const list = document.getElementById("characterList");
     list.innerHTML = "<p>불러오는 중...</p>";
-    selectedCharacterIds.clear();
+    selectedCharacterStats.clear();
 
     cachedCharacters = await getCharacters();
 
@@ -71,68 +90,96 @@ async function loadCharacterList() {
         btn.className = "character-select-item";
         btn.textContent = character.name;
 
+        // 선택 시에만 보이는 상세 영역 (스탯 선택 + 미리보기)
+        const detail = document.createElement("div");
+        detail.className = "character-detail";
+        detail.style.display = "none";
+
+        const defaultStat = document.getElementById("statSelect").value;
+        const statSelect = createStatSelect(defaultStat);
+
         const preview = document.createElement("div");
         preview.className = "character-preview";
-        preview.style.display = "none";
         preview.textContent = buildCharacterPreview(character);
+
+        detail.appendChild(statSelect);
+        detail.appendChild(preview);
 
         btn.addEventListener("click", () => {
             const isSelected = btn.classList.toggle("selected");
-            preview.style.display = isSelected ? "block" : "none";
+            detail.style.display = isSelected ? "block" : "none";
             if (isSelected) {
-                selectedCharacterIds.add(character.id);
+                selectedCharacterStats.set(character.id, statSelect.value);
             }
             else {
-                selectedCharacterIds.delete(character.id);
+                selectedCharacterStats.delete(character.id);
+            }
+        });
+
+        statSelect.addEventListener("change", () => {
+            if (selectedCharacterStats.has(character.id)) {
+                selectedCharacterStats.set(character.id, statSelect.value);
             }
         });
 
         row.appendChild(btn);
-        row.appendChild(preview);
+        row.appendChild(detail);
         list.appendChild(row);
     });
 }
 // ----------------------------------------
-// 선택된 캐릭터
+// 전체 적용: 선택된 캐릭터 전부에게 상단 기본 스탯을 일괄 적용
 // ----------------------------------------
-function getSelectedCharacters() {
-    return cachedCharacters.filter(
-        c => selectedCharacterIds.has(c.id)
-    );
+function applyStatToAllSelected() {
+    if (selectedCharacterStats.size === 0) {
+        alert("선택된 캐릭터가 없습니다.");
+        return;
+    }
+    const defaultStat = document.getElementById("statSelect").value;
+    document.querySelectorAll(".character-select-item.selected")
+        .forEach(btn => {
+            const detail = btn.nextElementSibling;
+            const select = detail.querySelector(".character-stat-select");
+            select.value = defaultStat;
+        });
+    selectedCharacterStats.forEach((_, id) => {
+        selectedCharacterStats.set(id, defaultStat);
+    });
 }
 // ----------------------------------------
-// 판정
+// 선택된 캐릭터 (id + 각자의 스탯)
+// ----------------------------------------
+function getSelectedCharacterEntries() {
+    return cachedCharacters
+        .filter(c => selectedCharacterStats.has(c.id))
+        .map(c => ({
+            character: c,
+            statName: selectedCharacterStats.get(c.id)
+        }));
+}
+// ----------------------------------------
+// 판정 (캐릭터마다 다른 스탯으로 동시에 판정 가능)
 // ----------------------------------------
 function rollSelected() {
-    const characters = getSelectedCharacters();
-    if (characters.length === 0) {
+    const entries = getSelectedCharacterEntries();
+    if (entries.length === 0) {
         alert("캐릭터를 선택하세요.");
         return;
     }
-    const statName =
-        document.getElementById("statSelect").value;
-    const tbody =
-        document.getElementById("resultTable");
+    const tbody = document.getElementById("resultTable");
     tbody.innerHTML = "";
     const resultLines = [];
-     characters.forEach(character => {
-    const characterForRoll =
-        (statName === "specialty")
-            ? { ...character, stats: { ...character.stats, specialty: character.specialtyValue } }
-            : character;
-    const result =
-        DiceEngine.rollCharacter(
-            characterForRoll,
-            statName
-        );
-    addResultRow(
-        tbody,
-        result
-    );
-    resultLines.push(
-        `${result.name} [${result.dice}/${result.rank}]`
-    );
-});
+
+    entries.forEach(({ character, statName }) => {
+        const characterForRoll =
+            (statName === "specialty")
+                ? { ...character, stats: { ...character.stats, specialty: character.specialtyValue } }
+                : character;
+        const result = DiceEngine.rollCharacter(characterForRoll, statName);
+        addResultRow(tbody, result);
+        resultLines.push(`${result.name} [${result.dice}/${result.rank}]`);
+    });
+
     document.getElementById("resultText").textContent =
         resultLines.join("\n");
 }
