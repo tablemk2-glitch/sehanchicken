@@ -12,6 +12,10 @@ document.addEventListener("DOMContentLoaded", () => {
     document
         .getElementById("btnApplyAll")
         .addEventListener("click", applyStatToAllSelected);
+    document
+    .getElementById("btnResetSelection")
+    .addEventListener("click", resetSelection);
+    
 });
 // ----------------------------------------
 // 스탯 이름 변환
@@ -146,6 +150,25 @@ function applyStatToAllSelected() {
         selectedCharacterStats.set(id, defaultStat);
     });
 }
+
+// ----------------------------------------
+// 선택 초기화: 선택된 캐릭터/스탯 전부 해제
+// ----------------------------------------
+function resetSelection() {
+    selectedCharacterStats.clear();
+
+    document.querySelectorAll(".character-select-item.selected")
+        .forEach(btn => {
+            btn.classList.remove("selected");
+            const detail = btn.nextElementSibling;
+            detail.style.display = "none";
+        });
+
+    document.getElementById("resultTable").innerHTML = "";
+    document.getElementById("resultText").textContent = "";
+}
+
+
 // ----------------------------------------
 // 선택된 캐릭터 (id + 각자의 스탯)
 // ----------------------------------------
@@ -177,7 +200,7 @@ function rollSelected() {
                 : character;
         const result = DiceEngine.rollCharacter(characterForRoll, statName);
         addResultRow(tbody, result);
-        resultLines.push(`${result.name} [${result.dice}/${result.rank}]`);
+        resultLines.push(`${result.name} ${statNames[result.statName]} [${result.dice}/${result.rank}]`);
     });
 
     document.getElementById("resultText").textContent =
