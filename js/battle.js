@@ -1797,6 +1797,7 @@ const charListEl = card.querySelector(".character-list");
             const tag = document.createElement("span");
 
             tag.style.background = "#402020";
+            tag.style.color = "#ffffff";
             tag.style.padding = "2px 6px";
             tag.style.borderRadius = "3px";
             tag.style.display = "inline-flex";
