@@ -692,6 +692,45 @@ function removeCharacterInfection(battleId, characterId, infectionIndex) {
 
     }
 
+// ============================================
+// 캐릭터 전투 참여 인원에서 임시 이탈 처리 (진행자용)
+// ============================================
+
+function removeCharacterFromBattle(battleId, characterId) {
+
+    const battle = getBattle(battleId);
+    if (!battle) return null;
+    const character = battle.characters.find(c => c.id === characterId);
+    if (!character) return null;
+
+    character.status = "removed";
+    battle.log.push(`➖ ${character.name}이(가) 전투에서 임시 이탈했습니다.`);
+
+    saveBattles();
+    return battle;
+
+}
+
+// ★ 신규: 임시 이탈한 캐릭터 복귀
+function returnCharacterToBattle(battleId, characterId) {
+
+    const battle = getBattle(battleId);
+    if (!battle) return null;
+    const character = battle.characters.find(c => c.id === characterId);
+    if (!character) return null;
+
+    if (character.status !== "removed") return battle;
+
+    character.status = "alive";
+    battle.log.push(`↩ ${character.name}이(가) 전투에 복귀했습니다.`);
+
+    saveBattles();
+    return battle;
+
+}
+
+    
+
     // ============================================
     // 좀비 행동 처리 (좀비 페이즈)
     // ============================================
@@ -1238,6 +1277,8 @@ return {
         rollStat,
         pickRandomBodyPart,
         convertCharacterToZombieEnemy,
+        removeCharacterFromBattle,
+        returnCharacterToBattle, 
         addCharacterToBattle,   // ★ 추가
         isCharacterActive,      // ★ 추가 (UI에서 대기 상태 판단용)
         setZombieHits,
@@ -1525,7 +1566,7 @@ const zombieListEl = card.querySelector(".zombie-list");
 
         row.appendChild(infoSpan);
 
-        if (battle.status === "ongoing") {
+        if (battle.status === "ongoing" && character.status !== "removed") {
 
             const hitsInput = document.createElement("input");
 
@@ -1582,7 +1623,8 @@ const charListEl = card.querySelector(".character-list");
         const statusText2 = {
             alive: "생존",
             fled: "도주",
-            down: "전투불능"
+            down: "전투불능",
+            removed: "임시 이탈"
         }[character.status];
         
         const isWaitingToJoin = character.joinRound && battle.round < character.joinRound;
@@ -1645,6 +1687,54 @@ const charListEl = card.querySelector(".character-list");
             });
 
             row.appendChild(btnConvert);
+
+
+            if (character.status !== "removed") {
+
+                const btnRemove = document.createElement("button");
+
+                btnRemove.type = "button";
+                btnRemove.className = "btnRemoveFromBattle";
+                btnRemove.textContent = "➖ 임시 이탈";
+
+                btnRemove.addEventListener("click", (e) => {
+
+                    e.stopPropagation();
+
+                    if (!confirm(`${character.name}을(를) 전투에서 임시 이탈시키겠습니까?\n(HP/감염 기록은 유지되며 나중에 복귀 가능합니다)`)) {
+                        return;
+                    }
+
+                    BattleManager.removeCharacterFromBattle(battle.id, character.id);
+
+                    renderAllBattles();
+
+                });
+
+                row.appendChild(btnRemove);
+
+            } else {
+
+                const btnReturn = document.createElement("button");
+
+                btnReturn.type = "button";
+                btnReturn.className = "btnReturnToBattle";
+                btnReturn.textContent = "↩ 전투 복귀";
+
+                btnReturn.addEventListener("click", (e) => {
+
+                    e.stopPropagation();
+
+                    BattleManager.returnCharacterToBattle(battle.id, character.id);
+
+                    renderAllBattles();
+
+                });
+
+                row.appendChild(btnReturn);
+
+            }
+            
 
         }
 
