@@ -1566,7 +1566,7 @@ const zombieListEl = card.querySelector(".zombie-list");
 
         row.appendChild(infoSpan);
 
-        if (battle.status === "ongoing" && character.status !== "removed") {
+        if (battle.status === "ongoing") {
 
             const hitsInput = document.createElement("input");
 
