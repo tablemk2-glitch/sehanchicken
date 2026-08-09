@@ -116,31 +116,24 @@ const BattleManager = (() => {
     function makeZombieStatObject(zombie) {
 
         return {
-
-            name: `좀비 #${zombie.id}`,
-
+            name: getZombieDisplayName(zombie),
             profile: "",
-
             stats: {
-
                 strength: ZOMBIE_STAT_LEVEL,
-
                 agility: ZOMBIE_STAT_LEVEL,
-
                 intelligence: ZOMBIE_STAT_LEVEL,
-
                 luck: ZOMBIE_STAT_LEVEL,
-
                 specialty: ZOMBIE_STAT_LEVEL
-
             }
-
         };
-
     }
 
-    // 전환된 캐릭터는 원래 스탯(character.stats)을 그대로 사용,
-    // 일반 좀비는 기존처럼 고정 스탯 사용
+    // ★ 추가: 좀비 표시 이름 통일 (전환된 캐릭터는 원래 이름, 일반 좀비는 "좀비 N")
+    function getZombieDisplayName(zombie) {
+        return zombie.isTurnedCharacter ? zombie.name : `좀비 ${zombie.id}`;
+}
+    
+    // 전환된 캐릭터는 원래 스탯(character.stats)을 그대로 사용, 일반 좀비는 기존처럼 고정 스탯 사용
 
     function getZombieStatObject(zombie) {
         if (zombie.stats) {
@@ -384,7 +377,7 @@ const BattleManager = (() => {
 
         }
 
-        const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+        const zombieDisplayName = getZombieDisplayName(zombie);
 
         if (zombie.hits >= zombie.requiredHits) {
 
@@ -594,76 +587,76 @@ async function addCharacterToBattle(battleId, characterId) {
             zombie.hits = clamped;
             zombie.alive = zombie.hits < zombie.requiredHits;
         
-            const displayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+            const displayName = getZombieDisplayName(zombie);
         
             battle.log.push(`⚙ [수동 조정] ${displayName} 누적 피해 ${old} → ${zombie.hits}${zombie.alive ? "" : " (전투불능 처리)"}`);
             saveBattles();
             return battle;
     }
 
-function setCharacterHp(battleId, characterId, newHp) {
-
-    const battle = getBattle(battleId);
-    if (!battle) return null;
-    const character = battle.characters.find(c => c.id === characterId);
-    if (!character) return null;
-    const clamped = Math.max(0, Math.min(Number(newHp) || 0, character.maxHp));
-    const old = character.hp;
-
-    character.hp = clamped;
-
-    if (character.hp <= 0 && character.status === "alive") {
-        character.status = "down";
+    function setCharacterHp(battleId, characterId, newHp) {
+    
+        const battle = getBattle(battleId);
+        if (!battle) return null;
+        const character = battle.characters.find(c => c.id === characterId);
+        if (!character) return null;
+        const clamped = Math.max(0, Math.min(Number(newHp) || 0, character.maxHp));
+        const old = character.hp;
+    
+        character.hp = clamped;
+    
+        if (character.hp <= 0 && character.status === "alive") {
+            character.status = "down";
+        }
+    
+        else if (character.hp > 0 && character.status === "down") {
+            character.status = "alive"; // GM 수동 소생/회복 처리
+        }
+    
+        battle.log.push(`⚙ [수동 조정] ${character.name} HP ${old} → ${character.hp}${character.status === "down" ? " (전투불능 처리)" : ""}`);
+        saveBattles();
+        return battle;
     }
 
-    else if (character.hp > 0 && character.status === "down") {
-        character.status = "alive"; // GM 수동 소생/회복 처리
+
+    // ★ 추가: 감염 수동 추가 (GM용)
+    function addCharacterInfection(battleId, characterId, part) {
+    
+        const battle = getBattle(battleId);
+        if (!battle) return null;
+        const character = battle.characters.find(c => c.id === characterId);
+        if (!character) return null;
+    
+        const usedPart = part || pickRandomBodyPart();
+    
+        character.infections.push({ part: usedPart, round: battle.round });
+    
+        battle.log.push(`⚙ [수동 조정] ${character.name} 감염 부위 추가: ${usedPart}`);
+    
+        saveBattles();
+        return battle;
+    
     }
 
-    battle.log.push(`⚙ [수동 조정] ${character.name} HP ${old} → ${character.hp}${character.status === "down" ? " (전투불능 처리)" : ""}`);
-    saveBattles();
-    return battle;
-}
-
-
-// ★ 추가: 감염 수동 추가 (GM용)
-function addCharacterInfection(battleId, characterId, part) {
-
-    const battle = getBattle(battleId);
-    if (!battle) return null;
-    const character = battle.characters.find(c => c.id === characterId);
-    if (!character) return null;
-
-    const usedPart = part || pickRandomBodyPart();
-
-    character.infections.push({ part: usedPart, round: battle.round });
-
-    battle.log.push(`⚙ [수동 조정] ${character.name} 감염 부위 추가: ${usedPart}`);
-
-    saveBattles();
-    return battle;
-
-}
-
-// ★ 추가: 감염 수동 제거 (GM용)
-function removeCharacterInfection(battleId, characterId, infectionIndex) {
-
-    const battle = getBattle(battleId);
-    if (!battle) return null;
-    const character = battle.characters.find(c => c.id === characterId);
-    if (!character) return null;
-
-    const removed = character.infections[infectionIndex];
-    if (!removed) return null;
-
-    character.infections.splice(infectionIndex, 1);
-
-    battle.log.push(`⚙ [수동 조정] ${character.name} 감염 부위 제거: ${removed.part}`);
-
-    saveBattles();
-    return battle;
-
-}
+    // ★ 추가: 감염 수동 제거 (GM용)
+    function removeCharacterInfection(battleId, characterId, infectionIndex) {
+    
+        const battle = getBattle(battleId);
+        if (!battle) return null;
+        const character = battle.characters.find(c => c.id === characterId);
+        if (!character) return null;
+    
+        const removed = character.infections[infectionIndex];
+        if (!removed) return null;
+    
+        character.infections.splice(infectionIndex, 1);
+    
+        battle.log.push(`⚙ [수동 조정] ${character.name} 감염 부위 제거: ${removed.part}`);
+    
+        saveBattles();
+        return battle;
+    
+    }
 
     
   function resolveSpecialty(character, log) {
@@ -781,32 +774,72 @@ function applyZombieHit(battle, target, attackResult, log, summary) {
 }
 
 
-// ★ 변경: 좀비 지목만 담당 (1단계에서 호출)
-function pickZombieTarget(battle, zombie, log) {
-    
+// ★ 변경: 좀비 지목만 담당, 로그는 그룹핑 후 별도로 처리 (여기서 직접 로그하지 않음)
+function pickZombieTarget(battle, zombie) {
+
     const aliveCharacters = battle.characters.filter(c => isCharacterActive(battle, c));
-    const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
 
     if (aliveCharacters.length === 0) {
-
-        log.push(`- ${zombieDisplayName}: 공격 가능한 대상 없음`);
-
         return { zombieId: zombie.id, targetCharacterId: null };
-
     }
 
     const target = DiceEngine.randomChoice(aliveCharacters);
-
-    log.push(`- ${zombieDisplayName} → ${target.name}을(를) 지목!`);
 
     return { zombieId: zombie.id, targetCharacterId: target.id };
 
 }
 
+// ★ 추가: 같은 대상을 지목한 좀비들을 묶어서 로그 라인 생성
+// 예) "- 좀비 #1, 좀비 #2, 좀비 #3 → 홍길동을(를) 지목!"
+function buildZombieTargetLogLines(battle, targets) {
+
+    const lines = [];
+    const groups = new Map(); // targetCharacterId(문자열) 또는 "__none__" → 좀비 표기명 배열
+
+    targets.forEach(({ zombieId, targetCharacterId }) => {
+    
+        const zombie = battle.zombies.find(z => String(z.id) === String(zombieId));
+    
+        // zombie를 못 찾는 경우(비정상 상황)만 예외적으로 직접 조립, 나머진 헬퍼 사용
+        const zombieDisplayName = zombie
+            ? getZombieDisplayName(zombie)
+            : `좀비 ${zombieId}`;
+    
+        const key = targetCharacterId ? String(targetCharacterId) : "__none__";
+    
+        if (!groups.has(key)) groups.set(key, []);
+    
+        groups.get(key).push(zombieDisplayName);
+    
+    });
+
+    groups.forEach((zombieNames, key) => {
+
+        const namesText = zombieNames.join(", ");
+
+        if (key === "__none__") {
+
+            lines.push(`- ${namesText}: 공격 가능한 대상 없음`);
+
+        } else {
+
+            const target = battle.characters.find(c => String(c.id) === key);
+
+            lines.push(`- ${namesText} → ${target ? target.name : "알 수 없음"}을(를) 지목!`);
+
+        }
+
+    });
+
+    return lines;
+
+}
+
+    
 // ★ 변경: 지목된 대상에 대한 실제 공격 판정/피해 적용 (2단계에서 호출)
 function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, summary, assistedIds, assistingIds, selfDodgeIds) {
 
-    const zombieDisplayName = zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+    const zombieDisplayName = getZombieDisplayName(zombie);
 
     if (!targetCharacterId) {
         return; // 지목 당시 대상 없음은 1단계에서 이미 로그됨
@@ -1006,18 +1039,19 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             }
         
             // ★ 러너 선공이든 좀비 선공이든, 여기서 항상 "좀비 지목"까지만 진행
+
             log.push(`[좀비 지목]`);
-        
-            const targets = [];
-        
-            battle.zombies.forEach(zombie => {
-        
-                if (!zombie.alive) return; // 러너 페이즈에서 쓰러진 좀비는 지목 제외
-        
-                targets.push(pickZombieTarget(battle, zombie, log));
-        
-            });
-        
+            
+                const targets = [];
+            
+                battle.zombies.forEach(zombie => {
+                    if (!zombie.alive) return;
+                    targets.push(pickZombieTarget(battle, zombie)); // ★ log 인자 제거
+                });
+            
+                log.push(...buildZombieTargetLogLines(battle, targets)); // ★ 그룹핑된 로그 추가
+
+            
             battle.log.push(...log);
         
             battle.phase = "targeted";
@@ -1077,7 +1111,7 @@ function resolveReactionPhase(battleId, actions) {
 
         if (action.type === "attack") {
             const zombie = battle.zombies.find(z => String(z.id) === String(action.targetZombieId));
-            const zombieName = zombie ? (zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`) : "알 수 없음";
+            const zombieName = zombie ? getZombieDisplayName(zombie) : "알 수 없음";
             desc += ` (대상: ${zombieName})`;
         }
 
@@ -1276,6 +1310,7 @@ return {
         resolveZombiePhase,
         rollStat,
         pickRandomBodyPart,
+        getZombieDisplayName,
         convertCharacterToZombieEnemy,
         removeCharacterFromBattle,
         returnCharacterToBattle, 
@@ -1554,9 +1589,7 @@ const zombieListEl = card.querySelector(".zombie-list");
         row.style.marginBottom = "4px";
 
         // 전환된 캐릭터는 원래 이름을 그대로, 일반 좀비는 "좀비 #n" 표기
-        const zombieLabel = zombie.isTurnedCharacter
-            ? zombie.name
-            : `좀비 #${zombie.id}`;
+        const zombieLabel = getZombieDisplayName(zombie);
 
         const infoSpan = document.createElement("span");
 
@@ -1939,7 +1972,7 @@ const charListEl = card.querySelector(".character-list");
 
 //헬퍼 
 function getZombieDisplayName(zombie) {
-    return zombie.isTurnedCharacter ? zombie.name : `좀비 #${zombie.id}`;
+    return BattleManager.getZombieDisplayName(zombie);
 }
 
 function createActionRow(character, aliveZombies, aliveCharacters) {
@@ -2054,22 +2087,35 @@ function renderRoundControls(battle) {
         wrap.innerHTML = `<h3>좀비 지목 결과</h3>`;
 
         const targetList = document.createElement("ul");
+        const targetGroups = new Map(); // key → 좀비 표기명 배열
 
         (battle.pendingZombieTargets || []).forEach(({ zombieId, targetCharacterId }) => {
 
             const zombie = battle.zombies.find(z => String(z.id) === String(zombieId));
-            const target = battle.characters.find(c => c.id === targetCharacterId);
+            const zombieName = zombie ? getZombieDisplayName(zombie) : "알 수 없는 좀비";
 
-            const li = document.createElement("li");
-            li.textContent = zombie
-                ? `${getZombieDisplayName(zombie)} → ${target ? target.name : "대상 없음"}`
-                : "알 수 없는 좀비";
+            const key = targetCharacterId ? String(targetCharacterId) : "__none__";
 
-            targetList.appendChild(li);
+            if (!targetGroups.has(key)) targetGroups.set(key, []);
+            targetGroups.get(key).push(zombieName);
 
         });
 
+        targetGroups.forEach((zombieNames, key) => {
+
+            const li = document.createElement("li");
+
+            if (key === "__none__") {
+                li.textContent = `${zombieNames.join(", ")} → 대상 없음`;
+            } else {
+                const target = battle.characters.find(c => String(c.id) === key);
+                li.textContent = `${zombieNames.join(", ")} → ${target ? target.name : "알 수 없음"}`;
+            }
+            targetList.appendChild(li);
+        });
+
         wrap.appendChild(targetList);
+
 
         const reactionHeading = document.createElement("h3");
         reactionHeading.textContent = "반응 행동 선택";
