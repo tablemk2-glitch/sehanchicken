@@ -4,6 +4,9 @@
 // ============================================
 //
 // [수정 사항 - 이번 변경]
+// - 캐릭터 행동 순서를 지정할 수 있도록 UI에 순서 이동(▲▼) 버튼을 추가하고,
+//   battle.js의 러너 페이즈 / 반응 행동 판정 로직이 그 순서를 따르도록 변경했습니다.
+//   (좀비 지목 및 좀비 공격 판정은 기존과 동일하게 순서 지정 없이 처리됩니다.)
 // - 캐릭터를 좀비로 전환할 때 이름 뒤에 붙던 "(전환됨)" 표기를 제거하고,
 //   전환된 좀비도 원래 캐릭터 이름을 그대로 표시하도록 변경했습니다.
 //   (convertCharacterToZombieEnemy, renderBattleCard의 좀비 목록,
@@ -28,6 +31,9 @@
 //    쪽이 승리하며, 스탯값까지 같다면 방어측(회피)이 승리합니다.
 // 7) 회피 판정에서 "대실패"가 나오면 추가 페널티로 HP -1이 적용됩니다.
 //    (러너의 도주 판정, 캐릭터의 피격 회피 판정 모두 동일하게 적용)
+// 8) 캐릭터 행동 순서: UI에서 지정한 순서(orderedIds)가 있으면 그 순서대로
+//    러너 페이즈 / 반응 행동을 처리합니다. 순서가 없으면 캐릭터 배열 순서를
+//    그대로 사용합니다(기존 동작과 동일). 좀비 지목/공격은 순서 개념이 없습니다.
 //
 // [전투 데이터 저장 방식]
 // 전투(battle) 자체의 진행 상태는 여전히 localStorage에 저장합니다.
@@ -223,6 +229,7 @@ const BattleManager = (() => {
         pendingAssistedIds: null,
         pendingAssistingIds: null,
         pendingSelfDodgeIds: null,  // ★ 추가
+        pendingReactionOrder: null, // ★ 추가: 반응 행동 처리 순서
         pendingSummary: null
     
     };
@@ -277,6 +284,20 @@ const BattleManager = (() => {
         return character.status === "alive"
             && (!character.joinRound || battle.round >= character.joinRound);
     
+    }
+
+    // ★ 추가: 활성 캐릭터를 지정된 순서(orderedIds)대로 정렬한 id 목록 반환.
+    // orderedIds가 없거나 비어있으면 battle.characters 원래 순서를 사용(기존 동작과 동일).
+    function resolveActiveOrder(battle, orderedIds) {
+
+        if (orderedIds && orderedIds.length > 0) {
+            return orderedIds;
+        }
+
+        return battle.characters
+            .filter(c => isCharacterActive(battle, c))
+            .map(c => c.id);
+
     }
 
     // ----------------------------------------
@@ -775,6 +796,7 @@ function applyZombieHit(battle, target, attackResult, log, summary) {
 
 
 // ★ 변경: 좀비 지목만 담당, 로그는 그룹핑 후 별도로 처리 (여기서 직접 로그하지 않음)
+// (좀비는 순서 지정 없이 기존 방식 그대로 매 공격마다 무작위 지목)
 function pickZombieTarget(battle, zombie) {
 
     const aliveCharacters = battle.characters.filter(c => isCharacterActive(battle, c));
@@ -948,9 +970,10 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
 
         // ============================================
         // 1단계: 러너 페이즈 + 좀비 지목
+        // ★ orderedIds: UI에서 지정한 캐릭터 행동 순서(id 배열). 없으면 기존 순서 사용.
         // ============================================
         
-        function resolveRunnerAndTargetPhase(battleId, actions, skipRunnerPhase) {
+        function resolveRunnerAndTargetPhase(battleId, actions, skipRunnerPhase, orderedIds) {
         
             const battle = getBattle(battleId);
         
@@ -974,17 +997,23 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
         
                 log.push(`[러너 페이즈]`);
         
-                //대기
+                // 대기 중인 캐릭터 로그 (순서 지정과 무관하게 먼저 표시)
                 battle.characters.forEach(character => {
-                
-                    if (character.status !== "alive") return;
-                
-                    if (!isCharacterActive(battle, character)) {
+                    if (character.status === "alive" && !isCharacterActive(battle, character)) {
                         log.push(`- ${character.name}: 전투 합류 대기 중 (${character.joinRound}라운드부터 행동 가능)`);
-                        return;
                     }
-                
-                    const action = actions[character.id];
+                });
+        
+                // ★ 활성 캐릭터는 지정된 순서(orderedIds)대로 행동 처리
+                const idsInOrder = resolveActiveOrder(battle, orderedIds);
+        
+                idsInOrder.forEach(charId => {
+        
+                    const character = battle.characters.find(c => String(c.id) === String(charId));
+        
+                    if (!character || character.status !== "alive" || !isCharacterActive(battle, character)) return;
+        
+                    const action = actions[character.id] ?? actions[charId];
                         
                     if (!action || action.type === "none") {
                         log.push(`- ${character.name}: 행동 없음`);
@@ -1039,6 +1068,7 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
             }
         
             // ★ 러너 선공이든 좀비 선공이든, 여기서 항상 "좀비 지목"까지만 진행
+            // (좀비 지목은 순서 지정 대상이 아니므로 기존과 동일하게 처리)
 
             log.push(`[좀비 지목]`);
             
@@ -1069,9 +1099,11 @@ function resolveZombieAttackResolution(battle, zombie, targetCharacterId, log, s
 
     // ============================================
     // 1.5단계: 좀비 지목 공개 후 반응 행동 처리
+    // ★ orderedIds: UI에서 지정한 캐릭터 반응 행동 순서(id 배열). 판정은 좀비 페이즈에서
+    //   이 순서대로 진행되도록 battle.pendingReactionOrder에 저장해둡니다.
     // ============================================
     
-function resolveReactionPhase(battleId, actions) {
+function resolveReactionPhase(battleId, actions, orderedIds) {
 
     const battle = getBattle(battleId);
 
@@ -1091,16 +1123,20 @@ function resolveReactionPhase(battleId, actions) {
         assistEvade: "회피 보조"
     };
 
-    battle.characters.forEach(character => {
+    const idsInOrder = resolveActiveOrder(battle, orderedIds);
 
-        if (character.status !== "alive") return;
+    idsInOrder.forEach(charId => {
+
+        const character = battle.characters.find(c => String(c.id) === String(charId));
+
+        if (!character || character.status !== "alive") return;
 
         if (!isCharacterActive(battle, character)) {
             log.push(`- ${character.name}: 전투 합류 대기 중 (${character.joinRound}라운드부터 행동 가능)`);
             return;
         }
 
-        const action = actions[character.id];
+        const action = actions[character.id] ?? actions[charId];
 
         if (!action || action.type === "none") {
             log.push(`- ${character.name}: 반응 행동 없음`);
@@ -1130,6 +1166,7 @@ function resolveReactionPhase(battleId, actions) {
 
     battle.phase = "reacted";
     battle.pendingReactionActions = actions; // ★ 판정은 나중에(좀비 페이즈에서) 진행
+    battle.pendingReactionOrder = idsInOrder; // ★ 추가: 실제 판정 순서 저장
 
     saveBattles();
 
@@ -1162,15 +1199,22 @@ function resolveReactionPhase(battleId, actions) {
     // ★ 반응 페이즈에서 "선택"만 해뒀던 행동을 여기서 실제로 판정
     const reactionActions = battle.pendingReactionActions || {};
 
+    // ★ 반응 페이즈에서 저장해둔 순서(orderedIds)대로 판정. 없으면 기존 순서로 폴백.
+    const reactionOrder = (battle.pendingReactionOrder && battle.pendingReactionOrder.length > 0)
+        ? battle.pendingReactionOrder
+        : resolveActiveOrder(battle, null);
+
     log.push(`[반응 행동 판정]`);
 
-    battle.characters.forEach(character => {
+    reactionOrder.forEach(charId => {
 
-        if (character.status !== "alive") return;
+        const character = battle.characters.find(c => String(c.id) === String(charId));
+
+        if (!character || character.status !== "alive") return;
 
         if (!isCharacterActive(battle, character)) return;
 
-        const action = reactionActions[character.id];
+        const action = reactionActions[character.id] ?? reactionActions[charId];
 
         // 행동 없음 / dodge는 여기서 따로 판정하지 않음
         // → dodge는 아래 좀비 공격 판정 시 회피 대항 판정으로 자연스럽게 비교됨
@@ -1287,6 +1331,7 @@ function resolveReactionPhase(battleId, actions) {
     battle.pendingAssistingIds = null;
     battle.pendingSelfDodgeIds = null;
     battle.pendingReactionActions = null; // ★ 추가: 초기화
+    battle.pendingReactionOrder = null;   // ★ 추가: 초기화
     battle.pendingSummary = null;
 
     saveBattles();
@@ -1976,6 +2021,7 @@ function getZombieDisplayName(zombie) {
     return BattleManager.getZombieDisplayName(zombie);
 }
 
+// ★ 변경: 행동 행에 순서 이동(▲▼) 버튼 추가
 function createActionRow(character, aliveZombies, aliveCharacters) {
 
     const row = document.createElement("div");
@@ -1994,6 +2040,10 @@ function createActionRow(character, aliveZombies, aliveCharacters) {
         .join("");
 
     row.innerHTML = `
+        <span class="orderHandle" style="display:inline-flex; flex-direction:column; gap:2px; margin-right:4px;">
+            <button type="button" class="btnMoveUp" title="순서 위로" style="line-height:1; padding:0 4px;">▲</button>
+            <button type="button" class="btnMoveDown" title="순서 아래로" style="line-height:1; padding:0 4px;">▼</button>
+        </span>
         <b>${character.name}</b>
         <select class="actionType">
             <option value="attack">공격(근력)</option>
@@ -2023,20 +2073,41 @@ function createActionRow(character, aliveZombies, aliveCharacters) {
     actionTypeSelect.addEventListener("change", syncTargetVisibility);
     syncTargetVisibility();
 
+    // ★ 추가: 순서 이동 (같은 컨테이너 내 형제 노드와 위치를 교환)
+    row.querySelector(".btnMoveUp").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const prev = row.previousElementSibling;
+        if (prev) {
+            row.parentNode.insertBefore(row, prev);
+        }
+    });
+
+    row.querySelector(".btnMoveDown").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const next = row.nextElementSibling;
+        if (next) {
+            row.parentNode.insertBefore(next, row);
+        }
+    });
+
     return row;
 
 }
 
-function collectActionsFromRows(wrap) {
+// ★ 변경: 컨테이너 내 DOM 순서 그대로 orderedIds도 함께 반환
+function collectActionsFromRows(container) {
 
     const actions = {};
+    const orderedIds = [];
 
-    wrap.querySelectorAll(".action-row").forEach(row => {
+    container.querySelectorAll(".action-row").forEach(row => {
 
         const characterId = row.dataset.characterId;
         const type = row.querySelector(".actionType").value;
         const targetZombieId = row.querySelector(".actionTargetZombie").value;
         const targetCharacterId = row.querySelector(".actionTargetCharacter").value;
+
+        orderedIds.push(characterId);
 
         if (type === "assistEvade" && !targetCharacterId) {
             actions[characterId] = { type: "none" };
@@ -2047,7 +2118,7 @@ function collectActionsFromRows(wrap) {
 
     });
 
-    return actions;
+    return { actions, orderedIds };
 
 } 
 //헬퍼
@@ -2119,19 +2190,25 @@ function renderRoundControls(battle) {
 
 
         const reactionHeading = document.createElement("h3");
-        reactionHeading.textContent = "반응 행동 선택";
+        reactionHeading.textContent = "반응 행동 선택 (▲▼로 처리 순서 조정 가능)";
         wrap.appendChild(reactionHeading);
 
+        // ★ 변경: 행동 행들을 전용 컨테이너에 담아 순서 조작/수집이 가능하도록 함
+        const actionRowsContainer = document.createElement("div");
+        actionRowsContainer.className = "actionRowsContainer";
+
         aliveCharacters.forEach(character => {
-            wrap.appendChild(createActionRow(character, aliveZombies, aliveCharacters));
+            actionRowsContainer.appendChild(createActionRow(character, aliveZombies, aliveCharacters));
         });
+
+        wrap.appendChild(actionRowsContainer);
 
         const btnResolveReaction = document.createElement("button");
         btnResolveReaction.textContent = "반응 행동 확정/좀비 페이즈 진행";
 
         btnResolveReaction.addEventListener("click", () => {
-            const actions = collectActionsFromRows(wrap);
-            BattleManager.resolveReactionPhase(battle.id, actions);
+            const { actions, orderedIds } = collectActionsFromRows(actionRowsContainer);
+            BattleManager.resolveReactionPhase(battle.id, actions, orderedIds);
             BattleManager.resolveZombiePhase(battle.id); // ★ 반응 행동 확정과 동시에 좀비 페이즈까지 이어서 진행
             renderAllBattles();
         });
@@ -2141,8 +2218,8 @@ function renderRoundControls(battle) {
 
     }
 
-    // ★ 1단계 대기: 행동 입력 (기존과 동일, 행동 열 생성만 헬퍼로 교체)
-    wrap.innerHTML = `<h3>이번 라운드 행동</h3>`;
+    // ★ 1단계 대기: 행동 입력 (▲▼로 처리 순서 조정 가능)
+    wrap.innerHTML = `<h3>이번 라운드 행동 (▲▼로 처리 순서 조정 가능)</h3>`;
 
     const skipRow = document.createElement("label");
     skipRow.innerHTML = `
@@ -2153,9 +2230,15 @@ function renderRoundControls(battle) {
 
     const skipCheckbox = skipRow.querySelector(".skipRunnerPhase");
 
+    // ★ 변경: 행동 행들을 전용 컨테이너에 담아 순서 조작/수집이 가능하도록 함
+    const actionRowsContainer = document.createElement("div");
+    actionRowsContainer.className = "actionRowsContainer";
+
     aliveCharacters.forEach(character => {
-        wrap.appendChild(createActionRow(character, aliveZombies, aliveCharacters));
+        actionRowsContainer.appendChild(createActionRow(character, aliveZombies, aliveCharacters));
     });
+
+    wrap.appendChild(actionRowsContainer);
 
     const btnResolve = document.createElement("button");
 
@@ -2169,9 +2252,9 @@ function renderRoundControls(battle) {
     updateResolveButtonLabel();
 
     btnResolve.addEventListener("click", () => {
-        const actions = collectActionsFromRows(wrap);
+        const { actions, orderedIds } = collectActionsFromRows(actionRowsContainer);
         const skipRunnerPhase = skipCheckbox.checked;
-        BattleManager.resolveRunnerAndTargetPhase(battle.id, actions, skipRunnerPhase);
+        BattleManager.resolveRunnerAndTargetPhase(battle.id, actions, skipRunnerPhase, orderedIds);
         renderAllBattles();
     });
 
