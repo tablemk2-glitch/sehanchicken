@@ -22,37 +22,75 @@
     <!-- ========================= -->
     <!-- 전투 생성 -->
     <!-- ========================= -->
-    <section class="card">
-        <h2>새 전투 생성</h2>
-        <div class="battle-setting">
-            <div>
-                <label for="battleName">전투 이름</label>
-                <input
-                    type="text"
-                    id="battleName"
-                    placeholder="예) 학교 운동장">
+        <section class="card">
+            <h2>새 전투 생성</h2>
+        
+            <div class="battle-create-split">
+        
+                <div class="battle-create-main">
+                    <div class="battle-setting">
+                        <div>
+                            <label for="battleName">전투 이름</label>
+                            <input
+                                type="text"
+                                id="battleName"
+                                placeholder="예) 학교 운동장">
+                        </div>
+                        <div>
+                            <label for="zombieCount">좀비 수</label>
+                            <input
+                                type="number"
+                                id="zombieCount"
+                                min="1"
+                                value="5">
+                        </div>
+                    </div>
+                    <h3>참여 캐릭터</h3>
+                    <div id="characterSelectList" class="character-select-list">
+                        <!-- battle.js에서 체크박스 목록 생성 -->
+                    </div>
+                    <p class="hint-text">
+                        좀비는 매 공격마다 생존한 참여 캐릭터 중 무작위로 대상을 지목합니다.
+                    </p>
+                    <br>
+                    <button id="btnCreateBattle" class="btn-primary">
+                        전투 생성
+                    </button>
+                </div>
+        
+                <div class="battle-create-side">
+        
+                    <div class="battle-side-panel">
+                        <h3>🧟 감염 부위</h3>
+                        <p class="hint-text">
+                            감염이 확정된 캐릭터의 부위를 무작위로 결정합니다.
+                        </p>
+                        <button id="btnPickBodyPart">부위 결정</button>
+                        <p id="bodyPartResult" class="result-text"></p>
+                    </div>
+        
+                    <div class="battle-side-panel">
+                        <h3>🎲 간이 다이스</h3>
+                        <p class="hint-text">
+                            전투 흐름과 별개로 스탯 레벨만 골라 즉석 판정할 때 사용합니다.
+                        </p>
+                        <label for="quickDiceStatLevel">스탯 레벨 (1~5)</label>
+                        <select id="quickDiceStatLevel">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                        <button id="btnQuickDiceRoll">판정</button>
+                        <p id="quickDiceResult" class="result-text"></p>
+                    </div>
+        
+                </div>
+        
             </div>
-            <div>
-                <label for="zombieCount">좀비 수</label>
-                <input
-                    type="number"
-                    id="zombieCount"
-                    min="1"
-                    value="5">
-            </div>
-        </div>
-        <h3>참여 캐릭터</h3>
-        <div id="characterSelectList" class="character-select-list">
-            <!-- battle.js에서 체크박스 목록 생성 -->
-        </div>
-        <p class="hint-text">
-            좀비는 매 공격마다 생존한 참여 캐릭터 중 무작위로 대상을 지목합니다.
-        </p>
-        <br>
-        <button id="btnCreateBattle" class="btn-primary">
-            전투 생성
-        </button>
-    </section>
+        
+        </section>
     <!-- ========================= -->
     <!-- 전투 목록 -->
     <!-- ========================= -->
@@ -71,91 +109,6 @@
     </section>
 </main>
 
-<!-- ========================= -->
-<!-- 플로팅 패널 컨테이너 -->
-<!-- ========================= -->
-
-<div class="floating-panel-container">
-
-    <!-- 감염 부위 -->
-    <div id="bodyPartFloatingPanel" class="floating-panel">
-
-        <div class="floating-panel__header"
-             data-target="bodyPartFloatingPanel">
-
-            <span>🧟 감염 부위</span>
-
-            <button
-                type="button"
-                class="floating-panel__minimize-btn">
-                ▾
-            </button>
-
-        </div>
-
-        <div class="floating-panel__body">
-
-            <p class="hint-text">
-                감염이 확정된 캐릭터의 부위를 무작위로 결정합니다.
-            </p>
-
-            <button id="btnPickBodyPart">
-                부위 결정
-            </button>
-
-            <p id="bodyPartResult"
-               class="result-text"></p>
-
-        </div>
-
-    </div>
-
-    <!-- 간이 다이스 -->
-    <div id="diceFloatingPanel" class="floating-panel">
-
-        <div class="floating-panel__header"
-             data-target="diceFloatingPanel">
-
-            <span>🎲 다이스</span>
-
-            <button
-                type="button"
-                class="floating-panel__minimize-btn">
-                ▾
-            </button>
-
-        </div>
-
-        <div class="floating-panel__body">
-
-            <p class="hint-text">
-                전투 흐름과 별개로 스탯 레벨만 골라 즉석 판정할 때 사용합니다.
-            </p>
-
-            <label for="quickDiceStatLevel">
-                스탯 레벨 (1~5)
-            </label>
-
-            <select id="quickDiceStatLevel">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3" selected>3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-            </select>
-
-            <button id="btnQuickDiceRoll">
-                판정
-            </button>
-
-            <p id="quickDiceResult"
-               class="result-text"></p>
-
-        </div>
-
-    </div>
-
-</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -163,52 +116,6 @@
 <script src="js/diceEngine.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/battle.js"></script>
-<script>
-    // ========================= //
-    // 플로팅 패널 최소화/펼치기 //
-    // ========================= //
-    (function () {
-        const STORAGE_KEY = 'floatingPanelState';
 
-        function loadState() {
-            try {
-                return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-            } catch (e) {
-                return {};
-            }
-        }
-
-        function saveState(state) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        }
-
-        function applyMinimized(panel, minimized) {
-            panel.classList.toggle('minimized', minimized);
-            const btn = panel.querySelector('.floating-panel__minimize-btn');
-            btn.textContent = minimized ? '▸' : '▾';
-            btn.setAttribute('aria-label', minimized ? '펼치기' : '최소화');
-        }
-
-        const state = loadState();
-
-        document.querySelectorAll('.floating-panel').forEach((panel) => {
-            const id = panel.id;
-            const header = panel.querySelector('.floating-panel__header');
-            const btn = panel.querySelector('.floating-panel__minimize-btn');
-
-            applyMinimized(panel, !!state[id]);
-
-            function toggle() {
-                const nowMinimized = !panel.classList.contains('minimized');
-                applyMinimized(panel, nowMinimized);
-                state[id] = nowMinimized;
-                saveState(state);
-            }
-
-            header.addEventListener('click', toggle);
-            btn.addEventListener('click', (e) => e.stopPropagation());
-        });
-    })();
-</script>
 </body>
 </html>
