@@ -332,3 +332,28 @@
     white-space: pre-wrap;
 
 }
+
+.battle-create-split {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.battle-create-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.battle-side-panel {
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+@media (max-width: 720px) {
+    .battle-create-split {
+        grid-template-columns: 1fr;
+    }
+}
