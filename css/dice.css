@@ -131,6 +131,24 @@
     cursor: pointer;
 }
 
+
+.character-stat-line {
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.character-stat-line:hover {
+    background: rgba(0,0,0,0.05);
+}
+.character-stat-line.stat-selected {
+    background: #4a90e2;
+    color: #fff;
+    font-weight: bold;
+}
+.character-select-item.expanded {
+    /* 필요시 펼쳐진 상태 스타일 */
+}
+
 #btnApplyAll:hover {
     background: #dde4f7;
 }
