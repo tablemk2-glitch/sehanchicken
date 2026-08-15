@@ -32,9 +32,9 @@ async function renderTable() {
             <td>${character.stats.agility}</td>
             <td>${character.stats.intelligence}</td>
             <td>${character.stats.luck}</td>
-            <td>${character.stats.hp}</td>
             <td>${character.specialtyValue ?? ""}</td>
             <td>${character.specialty || ""}</td>
+            <td>${character.stats.hp}</td>
             <td>${character.memo || ""}</td>
             <td>
                 <button onclick="editCharacter('${character.id}')">
